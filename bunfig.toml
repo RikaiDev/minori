@@ -1,0 +1,7 @@
+[install]
+# 使用 frozen lockfile 在 CI 中
+# frozen = true
+
+[install.scopes]
+# 設定私有 registry（如需要）
+# "@myorg" = "https://npm.myorg.com"

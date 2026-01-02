@@ -1,0 +1,103 @@
+{
+  "common": {
+    "success": "成功",
+    "error": "錯誤",
+    "confirm": "確認",
+    "cancel": "取消",
+    "yes": "是",
+    "no": "否",
+    "ok": "好",
+    "loading": "載入中...",
+    "retry": "請再試一次"
+  },
+  "record": {
+    "planting": {
+      "success": "✓ 已記錄！{crop} {area}{unit}",
+      "askCrop": "請問您種了什麼作物？",
+      "askArea": "請問{crop}種了多少面積？",
+      "predictedHarvest": "📅 預計採收：{date} 前後",
+      "optimalTemp": "🌡️ 最佳生長溫度：{temp}°C"
+    },
+    "harvest": {
+      "success": "✓ 已記錄！{crop} 採收 {quantity}{unit}",
+      "askCrop": "請問您採收了什麼作物？",
+      "askQuantity": "請問{crop}採收了多少？",
+      "notifyCooperative": "💡 需要幫您通知合作社嗎？"
+    },
+    "growth": {
+      "success": "✓ 已記錄 {crop} 的生長狀況",
+      "askCrop": "請問要記錄哪個作物的生長狀況？"
+    }
+  },
+  "query": {
+    "crops": {
+      "title": "📋 您目前的作物：",
+      "item": "{crop} {area}{unit} - 預計 {date} 採收",
+      "empty": "您目前沒有記錄的作物。",
+      "developing": "📋 查詢功能開發中，敬請期待！"
+    },
+    "forecast": {
+      "developing": "📅 預測功能開發中，敬請期待！"
+    },
+    "price": {
+      "developing": "💰 價格查詢功能開發中，敬請期待！"
+    }
+  },
+  "intent": {
+    "unknown": "抱歉，我不太理解您的意思。\n\n您可以試試：\n• 「今天種了兩分地的小白菜」\n• 「收了 50 公斤番茄」\n• 「我種了什麼」",
+    "confirmed": "✓ 好的！",
+    "cancelled": "好的，已取消。"
+  },
+  "help": {
+    "title": "🌾 minori 使用說明",
+    "intro": "我可以幫您：",
+    "recording": "• 記錄播種：「今天種了兩分地的小白菜」",
+    "harvesting": "• 記錄採收：「收了 50 公斤番茄」",
+    "querying": "• 查詢作物：「我種了什麼」",
+    "voice": "您也可以：",
+    "voiceOption": "• 傳送語音訊息（說話就能記錄）",
+    "photoOption": "• 傳送照片（拍照識別作物）",
+    "closing": "有問題隨時問我！"
+  },
+  "voice": {
+    "recognized": "🎤 「{text}」",
+    "notClear": "抱歉，我沒有聽清楚，請再說一次。",
+    "error": "抱歉，處理語音訊息時發生錯誤，請稍後再試。"
+  },
+  "photo": {
+    "received": "📷 收到您的照片！",
+    "developing": "作物辨識功能開發中，敬請期待！",
+    "error": "抱歉，處理照片時發生錯誤，請稍後再試。"
+  },
+  "error": {
+    "general": "抱歉，處理您的訊息時發生錯誤，請稍後再試。",
+    "unsupportedMessage": "抱歉，我目前只能處理文字、語音和圖片訊息。"
+  },
+  "crops": {
+    "bok-choy": "小白菜",
+    "water-spinach": "空心菜",
+    "lettuce-a": "A菜",
+    "spinach": "菠菜",
+    "cabbage": "高麗菜",
+    "white-radish": "白蘿蔔",
+    "carrot": "紅蘿蔔",
+    "cucumber": "小黃瓜",
+    "loofah": "絲瓜",
+    "bitter-gourd": "苦瓜",
+    "tomato": "番茄"
+  },
+  "units": {
+    "area": {
+      "plot": "分地",
+      "plots": "分地",
+      "jia": "甲",
+      "ping": "坪",
+      "hectare": "公頃"
+    },
+    "weight": {
+      "kg": "公斤",
+      "jin": "斤",
+      "taiwanJin": "台斤"
+    }
+  }
+}

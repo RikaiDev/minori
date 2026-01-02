@@ -1,0 +1,103 @@
+{
+  "common": {
+    "success": "Success",
+    "error": "Error",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "yes": "Yes",
+    "no": "No",
+    "ok": "OK",
+    "loading": "Loading...",
+    "retry": "Please try again"
+  },
+  "record": {
+    "planting": {
+      "success": "✓ Recorded! {crop} planted on {area} {unit}",
+      "askCrop": "What crop did you plant?",
+      "askArea": "How much area did you plant for {crop}?",
+      "predictedHarvest": "📅 Expected harvest: around {date}",
+      "optimalTemp": "🌡️ Optimal growing temperature: {temp}°C"
+    },
+    "harvest": {
+      "success": "✓ Recorded! Harvested {quantity} {unit} of {crop}",
+      "askCrop": "What crop did you harvest?",
+      "askQuantity": "How much {crop} did you harvest?",
+      "notifyCooperative": "💡 Would you like to notify the cooperative?"
+    },
+    "growth": {
+      "success": "✓ Recorded growth status for {crop}",
+      "askCrop": "Which crop's growth status would you like to record?"
+    }
+  },
+  "query": {
+    "crops": {
+      "title": "📋 Your current crops:",
+      "item": "{crop} {area} {unit} - Expected harvest: {date}",
+      "empty": "You don't have any recorded crops yet.",
+      "developing": "📋 Query feature is under development!"
+    },
+    "forecast": {
+      "developing": "📅 Forecast feature is under development!"
+    },
+    "price": {
+      "developing": "💰 Price query feature is under development!"
+    }
+  },
+  "intent": {
+    "unknown": "Sorry, I don't understand what you mean.\n\nYou can try:\n• \"Planted 2 plots of bok choy today\"\n• \"Harvested 50 kg of tomatoes\"\n• \"What have I planted?\"",
+    "confirmed": "✓ Got it!",
+    "cancelled": "OK, cancelled."
+  },
+  "help": {
+    "title": "🌾 minori User Guide",
+    "intro": "I can help you:",
+    "recording": "• Record planting: \"Planted 2 plots of bok choy today\"",
+    "harvesting": "• Record harvest: \"Harvested 50 kg of tomatoes\"",
+    "querying": "• Query crops: \"What have I planted?\"",
+    "voice": "You can also:",
+    "voiceOption": "• Send voice messages (speak to record)",
+    "photoOption": "• Send photos (identify crops by photo)",
+    "closing": "Feel free to ask anytime!"
+  },
+  "voice": {
+    "recognized": "🎤 \"{text}\"",
+    "notClear": "Sorry, I didn't catch that. Please try again.",
+    "error": "Sorry, there was an error processing your voice message. Please try again later."
+  },
+  "photo": {
+    "received": "📷 Photo received!",
+    "developing": "Crop recognition feature is under development!",
+    "error": "Sorry, there was an error processing your photo. Please try again later."
+  },
+  "error": {
+    "general": "Sorry, an error occurred while processing your message. Please try again later.",
+    "unsupportedMessage": "Sorry, I can only process text, voice, and photo messages for now."
+  },
+  "crops": {
+    "bok-choy": "Bok Choy",
+    "water-spinach": "Water Spinach",
+    "lettuce-a": "A-Choy (Lettuce)",
+    "spinach": "Spinach",
+    "cabbage": "Cabbage",
+    "white-radish": "White Radish",
+    "carrot": "Carrot",
+    "cucumber": "Cucumber",
+    "loofah": "Loofah",
+    "bitter-gourd": "Bitter Gourd",
+    "tomato": "Tomato"
+  },
+  "units": {
+    "area": {
+      "plot": "plot",
+      "plots": "plots",
+      "jia": "jia",
+      "ping": "ping",
+      "hectare": "hectare"
+    },
+    "weight": {
+      "kg": "kg",
+      "jin": "jin",
+      "taiwanJin": "Taiwan jin"
+    }
+  }
+}

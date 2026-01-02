@@ -1,0 +1,22 @@
+{
+  "name": "@minori/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@minori/shared": "workspace:*",
+    "@minori/core": "workspace:*",
+    "@minori/ai-engine": "workspace:*",
+    "@minori/line-bot": "workspace:*",
+    "@line/bot-sdk": "^9.6.0",
+    "hono": "^4.6.15"
+  }
+}

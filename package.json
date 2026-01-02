@@ -1,0 +1,29 @@
+{
+  "name": "minori",
+  "version": "0.1.0",
+  "description": "Agricultural AI collaboration platform — enabling farmers to record through voice while AI predicts harvest timing and yields",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.5",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "lint:fix": "turbo lint:fix",
+    "test": "turbo test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "clean": "turbo clean && rm -rf node_modules",
+    "typecheck": "turbo typecheck"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.14",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}
