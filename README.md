@@ -103,6 +103,13 @@ minori/
 └─────────────────────────────────────────────────────────┘
 ```
 
+## Documentation
+
+- [API Reference](docs/api.md) — Endpoint documentation
+- [Architecture](docs/architecture.md) — System design and diagrams
+- [Contributing Guide](CONTRIBUTING.md) — How to contribute
+- [Claude Guidelines](CLAUDE.md) — AI assistant coding standards
+
 ## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
