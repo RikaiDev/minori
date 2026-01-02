@@ -68,10 +68,7 @@ export function getLineBlobClient(): messagingApi.MessagingApiBlobClient {
  * @param text - Text message to send
  * @returns API response
  */
-export async function replyText(
-  replyToken: string,
-  text: string
-): Promise<ReplyMessageResponse> {
+export async function replyText(replyToken: string, text: string): Promise<ReplyMessageResponse> {
   const message: TextMessage = {
     type: 'text',
     text,

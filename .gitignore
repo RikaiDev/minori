@@ -13,10 +13,12 @@ dist/
 
 # IDE
 .idea/
-.vscode/
 *.swp
 *.swo
 .DS_Store
+
+# Husky internals
+.husky/_/
 
 # Logs
 logs/

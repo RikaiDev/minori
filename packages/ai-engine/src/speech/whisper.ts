@@ -53,9 +53,7 @@ const AGRICULTURE_PROMPT = `
  * console.log(result.text); // "今天種了兩分地的小白菜"
  * ```
  */
-export async function transcribe(
-  options: TranscribeOptions
-): Promise<TranscribeResult> {
+export async function transcribe(options: TranscribeOptions): Promise<TranscribeResult> {
   const { audioBuffer, language = 'zh', prompt } = options;
 
   // Create a File object for the OpenAI API using their toFile utility

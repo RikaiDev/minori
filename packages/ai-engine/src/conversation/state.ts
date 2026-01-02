@@ -145,9 +145,7 @@ export function mergeEntities(
 ): Partial<ParsedEntities> {
   return {
     ...existing,
-    ...Object.fromEntries(
-      Object.entries(incoming).filter(([, value]) => value !== undefined)
-    ),
+    ...Object.fromEntries(Object.entries(incoming).filter(([, value]) => value !== undefined)),
   };
 }
 
@@ -159,11 +157,7 @@ export function mergeEntities(
  * @param role - Message role ('user' or 'assistant')
  * @param content - Message content
  */
-export function addToHistory(
-  userId: string,
-  role: 'user' | 'assistant',
-  content: string
-): void {
+export function addToHistory(userId: string, role: 'user' | 'assistant', content: string): void {
   const state = getConversationState(userId);
   state.history.push({
     role,

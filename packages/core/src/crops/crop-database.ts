@@ -277,8 +277,6 @@ export function getAllCrops(): CropInfo[] {
  * @param season - Season to filter by
  * @returns Array of crops suitable for the season
  */
-export function getCropsBySeason(
-  season: 'spring' | 'summer' | 'autumn' | 'winter'
-): CropInfo[] {
+export function getCropsBySeason(season: 'spring' | 'summer' | 'autumn' | 'winter'): CropInfo[] {
   return CROPS.filter((crop) => crop.seasons.includes(season));
 }

@@ -74,10 +74,7 @@ function getNestedValue(obj: unknown, path: string): string | undefined {
  * @example
  * interpolate("Hello, {name}!", { name: "World" }) // "Hello, World!"
  */
-function interpolate(
-  template: string,
-  variables: Record<string, string | number>
-): string {
+function interpolate(template: string, variables: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (match, key) => {
     const value = variables[key];
     return value !== undefined ? String(value) : match;

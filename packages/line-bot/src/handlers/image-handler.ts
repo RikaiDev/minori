@@ -33,8 +33,5 @@ export async function handleImageMessage(
   // 2. Use Vision AI to recognize crop
   // 3. Return recognition result
 
-  await replyText(
-    replyToken,
-    t('photo.received') + '\n\n' + t('photo.developing')
-  );
+  await replyText(replyToken, t('photo.received') + '\n\n' + t('photo.developing'));
 }

@@ -150,7 +150,8 @@ function handleRecordPlanting(intent: ParsedIntent): string {
     const likelyDate = formatDate(prediction.predictions.likely);
 
     response += '\n\n' + t('record.planting.predictedHarvest', { date: likelyDate });
-    response += '\n' + t('record.planting.optimalTemp', { temp: cropInfo.growth.temperatureOptimal });
+    response +=
+      '\n' + t('record.planting.optimalTemp', { temp: cropInfo.growth.temperatureOptimal });
   }
 
   return response;

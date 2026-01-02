@@ -27,15 +27,11 @@ export interface WeatherData {
  * @param weather - Array of weather forecast data
  * @returns Adjustment factor (1.0 = no adjustment, >1.0 = slower growth)
  */
-function calculateClimateAdjustment(
-  crop: CropInfo,
-  weather: WeatherData[]
-): number {
+function calculateClimateAdjustment(crop: CropInfo, weather: WeatherData[]): number {
   if (weather.length === 0) return 1;
 
   const avgTemp =
-    weather.reduce((sum, w) => sum + (w.temperatureMin + w.temperatureMax) / 2, 0) /
-    weather.length;
+    weather.reduce((sum, w) => sum + (w.temperatureMin + w.temperatureMax) / 2, 0) / weather.length;
 
   // Temperature factor: growth slows when temp deviates from optimal
   let tempFactor = 1;

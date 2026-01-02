@@ -61,10 +61,7 @@ app.post('/webhook', async (c) => {
 
     // Verify LINE webhook signature
     const crypto = await import('crypto');
-    const hash = crypto
-      .createHmac('SHA256', LINE_CHANNEL_SECRET)
-      .update(body)
-      .digest('base64');
+    const hash = crypto.createHmac('SHA256', LINE_CHANNEL_SECRET).update(body).digest('base64');
 
     if (hash !== signature) {
       return c.json({ error: 'Invalid signature' }, 401);
