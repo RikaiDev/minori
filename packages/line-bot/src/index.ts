@@ -6,6 +6,7 @@
  */
 
 export * from './client';
+export * from './rich-menu';
 export * from './handlers/message-handler';
 export * from './handlers/audio-handler';
 export * from './handlers/image-handler';

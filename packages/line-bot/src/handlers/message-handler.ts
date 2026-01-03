@@ -10,11 +10,24 @@ import type { webhook } from '@line/bot-sdk';
 type WebhookEvent = webhook.Event;
 type MessageEvent = webhook.MessageEvent;
 type TextMessageContent = webhook.TextMessageContent;
-import { replyText } from '../client';
+import {
+  replyText,
+  replyWithQuickReply,
+  QuickReplyPresets,
+  type QuickReplyButton,
+} from '../client';
 import { parseIntent } from '@minori/ai-engine';
 import { findCropByName, predictHarvest } from '@minori/core';
 import { t, formatDate } from '@minori/shared';
 import type { ParsedIntent } from '@minori/shared';
+
+/**
+ * Response with optional quick reply buttons.
+ */
+interface MessageResponse {
+  text: string;
+  quickReply?: QuickReplyButton[];
+}
 
 /**
  * Handles a webhook event from LINE.
@@ -72,8 +85,12 @@ async function handleTextMessage(
     // Execute action based on intent
     const response = await executeIntent(intent, userId);
 
-    // Reply to user
-    await replyText(replyToken, response);
+    // Reply with or without quick reply buttons
+    if (response.quickReply && response.quickReply.length > 0) {
+      await replyWithQuickReply(replyToken, response.text, response.quickReply);
+    } else {
+      await replyText(replyToken, response.text);
+    }
   } catch (error) {
     console.error('Error processing message:', error);
     await replyText(replyToken, t('error.general'));
@@ -85,9 +102,9 @@ async function handleTextMessage(
  *
  * @param intent - Parsed intent from user input
  * @param _userId - LINE user ID (for future use)
- * @returns Response message to send to user
+ * @returns Response with text and optional quick reply buttons
  */
-async function executeIntent(intent: ParsedIntent, _userId: string): Promise<string> {
+async function executeIntent(intent: ParsedIntent, _userId: string): Promise<MessageResponse> {
   switch (intent.action) {
     case 'record_planting':
       return handleRecordPlanting(intent);
@@ -96,26 +113,47 @@ async function executeIntent(intent: ParsedIntent, _userId: string): Promise<str
       return handleRecordHarvest(intent);
 
     case 'query_crops':
-      return t('query.crops.developing');
+      return {
+        text: t('query.crops.developing'),
+        quickReply: QuickReplyPresets.mainMenu(),
+      };
 
     case 'query_forecast':
-      return t('query.forecast.developing');
+      return {
+        text: t('query.forecast.developing'),
+        quickReply: QuickReplyPresets.mainMenu(),
+      };
 
     case 'query_price':
-      return t('query.price.developing');
+      return {
+        text: t('query.price.developing'),
+        quickReply: QuickReplyPresets.mainMenu(),
+      };
 
     case 'confirm':
-      return t('intent.confirmed');
+      return {
+        text: t('intent.confirmed'),
+        quickReply: QuickReplyPresets.mainMenu(),
+      };
 
     case 'cancel':
-      return t('intent.cancelled');
+      return {
+        text: t('intent.cancelled'),
+        quickReply: QuickReplyPresets.mainMenu(),
+      };
 
     case 'help':
-      return getHelpMessage();
+      return {
+        text: getHelpMessage(),
+        quickReply: QuickReplyPresets.mainMenu(),
+      };
 
     case 'unknown':
     default:
-      return t('intent.unknown');
+      return {
+        text: t('intent.unknown'),
+        quickReply: QuickReplyPresets.helpCancel(),
+      };
   }
 }
 
@@ -123,16 +161,25 @@ async function executeIntent(intent: ParsedIntent, _userId: string): Promise<str
  * Handles planting record intent.
  *
  * @param intent - Parsed intent with planting information
- * @returns Response message
+ * @returns Response with text and quick reply buttons
  */
-function handleRecordPlanting(intent: ParsedIntent): string {
+function handleRecordPlanting(intent: ParsedIntent): MessageResponse {
   const { crop, area, areaUnit, cropId } = intent.entities;
 
+  // Ask for crop if not provided
   if (!crop) {
-    return t('record.planting.askCrop');
+    return {
+      text: t('record.planting.askCrop'),
+      quickReply: QuickReplyPresets.commonCrops(),
+    };
   }
+
+  // Ask for area if not provided
   if (!area) {
-    return t('record.planting.askArea', { crop });
+    return {
+      text: t('record.planting.askArea', { crop }),
+      quickReply: QuickReplyPresets.areaUnits(),
+    };
   }
 
   // Get crop info for prediction
@@ -154,23 +201,40 @@ function handleRecordPlanting(intent: ParsedIntent): string {
       '\n' + t('record.planting.optimalTemp', { temp: cropInfo.growth.temperatureOptimal });
   }
 
-  return response;
+  return {
+    text: response,
+    quickReply: QuickReplyPresets.afterPlanting(),
+  };
 }
 
 /**
  * Handles harvest record intent.
  *
  * @param intent - Parsed intent with harvest information
- * @returns Response message
+ * @returns Response with text and quick reply buttons
  */
-function handleRecordHarvest(intent: ParsedIntent): string {
+function handleRecordHarvest(intent: ParsedIntent): MessageResponse {
   const { crop, quantity, quantityUnit } = intent.entities;
 
+  // Ask for crop if not provided
   if (!crop) {
-    return t('record.harvest.askCrop');
+    return {
+      text: t('record.harvest.askCrop'),
+      quickReply: QuickReplyPresets.commonCrops(),
+    };
   }
+
+  // Ask for quantity if not provided
   if (!quantity) {
-    return t('record.harvest.askQuantity', { crop });
+    return {
+      text: t('record.harvest.askQuantity', { crop }),
+      quickReply: [
+        { label: '10公斤', text: '10公斤' },
+        { label: '20公斤', text: '20公斤' },
+        { label: '50公斤', text: '50公斤' },
+        { label: '100公斤', text: '100公斤' },
+      ],
+    };
   }
 
   let response = t('record.harvest.success', {
@@ -181,7 +245,10 @@ function handleRecordHarvest(intent: ParsedIntent): string {
 
   response += '\n\n' + t('record.harvest.notifyCooperative');
 
-  return response;
+  return {
+    text: response,
+    quickReply: QuickReplyPresets.afterHarvest(),
+  };
 }
 
 /**
