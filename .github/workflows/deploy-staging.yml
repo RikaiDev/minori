@@ -179,11 +179,13 @@ jobs:
 
       - name: Run database migrations
         run: |
-          echo "🗄️  Running database migrations..."
-          # Uncomment when Drizzle migrations are set up:
-          # bun run db:migrate
-          echo "⚠️  Database migrations not configured yet."
-          echo "Run 'bun run db:migrate' manually or configure this step."
+          if [ -n "$DATABASE_URL" ]; then
+            echo "🗄️  Running database migrations..."
+            bun run db:migrate
+            echo "✅ Database migrations complete!"
+          else
+            echo "⚠️  DATABASE_URL not set. Skipping migrations."
+          fi
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 

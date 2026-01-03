@@ -19,7 +19,11 @@
     "format:check": "prettier --check .",
     "clean": "turbo clean && rm -rf node_modules",
     "typecheck": "turbo typecheck",
-    "prepare": "husky"
+    "prepare": "husky",
+    "db:generate": "bun --cwd packages/database run db:generate",
+    "db:migrate": "bun --cwd packages/database run db:migrate",
+    "db:push": "bun --cwd packages/database run db:push",
+    "db:studio": "bun --cwd packages/database run db:studio"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
