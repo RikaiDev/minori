@@ -14,14 +14,26 @@ import { harvestRecords } from './harvest-records';
 import { growthRecords } from './growth-records';
 import { demands } from './demands';
 import { matches } from './matches';
+import {
+  dataSharingConfigs,
+  cooperativeSharingRelations as sharingRelationsTable,
+  memberInvitations,
+} from './tenant';
 
 /**
  * Cooperative relations.
  */
-export const cooperativesRelations = relations(cooperatives, ({ many }) => ({
+export const cooperativesRelations = relations(cooperatives, ({ one, many }) => ({
   users: many(users),
   demands: many(demands),
   matches: many(matches),
+  dataSharingConfig: one(dataSharingConfigs, {
+    fields: [cooperatives.id],
+    references: [dataSharingConfigs.cooperativeId],
+  }),
+  memberInvitations: many(memberInvitations),
+  sharingTo: many(sharingRelationsTable, { relationName: 'sharingCooperative' }),
+  receivingFrom: many(sharingRelationsTable, { relationName: 'receivingCooperative' }),
 }));
 
 /**
@@ -37,6 +49,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   harvestRecords: many(harvestRecords),
   demands: many(demands),
   matchesAsFarmer: many(matches),
+  sentInvitations: many(memberInvitations, { relationName: 'inviter' }),
 }));
 
 /**
@@ -125,5 +138,50 @@ export const matchesRelations = relations(matches, ({ one }) => ({
   cooperative: one(cooperatives, {
     fields: [matches.cooperativeId],
     references: [cooperatives.id],
+  }),
+}));
+
+/**
+ * Data sharing config relations.
+ */
+export const dataSharingConfigsRelations = relations(dataSharingConfigs, ({ one }) => ({
+  cooperative: one(cooperatives, {
+    fields: [dataSharingConfigs.cooperativeId],
+    references: [cooperatives.id],
+  }),
+}));
+
+/**
+ * Cooperative sharing relations.
+ */
+export const cooperativeSharingRelationsRelations = relations(sharingRelationsTable, ({ one }) => ({
+  sharingCooperative: one(cooperatives, {
+    fields: [sharingRelationsTable.sharingCooperativeId],
+    references: [cooperatives.id],
+    relationName: 'sharingCooperative',
+  }),
+  receivingCooperative: one(cooperatives, {
+    fields: [sharingRelationsTable.receivingCooperativeId],
+    references: [cooperatives.id],
+    relationName: 'receivingCooperative',
+  }),
+}));
+
+/**
+ * Member invitation relations.
+ */
+export const memberInvitationsRelations = relations(memberInvitations, ({ one }) => ({
+  cooperative: one(cooperatives, {
+    fields: [memberInvitations.cooperativeId],
+    references: [cooperatives.id],
+  }),
+  inviter: one(users, {
+    fields: [memberInvitations.invitedBy],
+    references: [users.id],
+    relationName: 'inviter',
+  }),
+  acceptedByUser: one(users, {
+    fields: [memberInvitations.acceptedBy],
+    references: [users.id],
   }),
 }));

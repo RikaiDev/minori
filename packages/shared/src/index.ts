@@ -163,7 +163,20 @@ export interface PriceTrend {
 // User Types
 // ============================================================
 
-export type UserRole = 'farmer' | 'cooperative' | 'customer';
+/**
+ * User roles in the system.
+ * - farmer: Agricultural producers
+ * - cooperative_admin: Cooperative administrators with elevated permissions
+ * - cooperative_staff: Regular cooperative staff
+ * - customer: External buyers
+ */
+export type UserRole = 'farmer' | 'cooperative_admin' | 'cooperative_staff' | 'customer';
+
+/**
+ * Legacy role type for backward compatibility.
+ * @deprecated Use UserRole instead
+ */
+export type LegacyUserRole = 'farmer' | 'cooperative' | 'customer';
 
 export interface User {
   id: string;
@@ -172,6 +185,236 @@ export interface User {
   cooperativeId: string;
   name?: string;
   locale?: 'en' | 'zh-TW';
+  createdAt: Date;
+}
+
+// ============================================================
+// Multi-Tenant Authorization Types
+// ============================================================
+
+/**
+ * Permission actions that can be performed in the system.
+ */
+export type PermissionAction =
+  // Record management
+  | 'record:create'
+  | 'record:read'
+  | 'record:update'
+  | 'record:delete'
+  // Demand management
+  | 'demand:create'
+  | 'demand:read'
+  | 'demand:update'
+  | 'demand:delete'
+  // Match management
+  | 'match:create'
+  | 'match:read'
+  | 'match:update'
+  | 'match:approve'
+  | 'match:reject'
+  // Member management
+  | 'member:read'
+  | 'member:invite'
+  | 'member:update'
+  | 'member:remove'
+  // Report access
+  | 'report:view'
+  | 'report:export'
+  // Cooperative settings
+  | 'cooperative:read'
+  | 'cooperative:update'
+  | 'cooperative:manage_sharing';
+
+/**
+ * Resource scopes for permissions.
+ */
+export type PermissionScope =
+  | 'own' // Only own resources
+  | 'cooperative' // All resources in the cooperative
+  | 'shared'; // Cross-cooperative shared resources
+
+/**
+ * Permission definition combining action and scope.
+ */
+export interface Permission {
+  action: PermissionAction;
+  scope: PermissionScope;
+}
+
+/**
+ * Role permission matrix defining what each role can do.
+ */
+export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
+  farmer: [
+    // Farmers can manage their own records
+    { action: 'record:create', scope: 'own' },
+    { action: 'record:read', scope: 'own' },
+    { action: 'record:update', scope: 'own' },
+    { action: 'record:delete', scope: 'own' },
+    // Farmers can view and respond to matches for their supply
+    { action: 'match:read', scope: 'own' },
+    { action: 'match:approve', scope: 'own' },
+    { action: 'match:reject', scope: 'own' },
+  ],
+  cooperative_admin: [
+    // Admins can manage all records in cooperative
+    { action: 'record:create', scope: 'cooperative' },
+    { action: 'record:read', scope: 'cooperative' },
+    { action: 'record:update', scope: 'cooperative' },
+    { action: 'record:delete', scope: 'cooperative' },
+    // Admins can manage demands
+    { action: 'demand:create', scope: 'cooperative' },
+    { action: 'demand:read', scope: 'cooperative' },
+    { action: 'demand:update', scope: 'cooperative' },
+    { action: 'demand:delete', scope: 'cooperative' },
+    // Admins can manage all matches
+    { action: 'match:create', scope: 'cooperative' },
+    { action: 'match:read', scope: 'cooperative' },
+    { action: 'match:update', scope: 'cooperative' },
+    { action: 'match:approve', scope: 'cooperative' },
+    { action: 'match:reject', scope: 'cooperative' },
+    // Admins can manage members
+    { action: 'member:read', scope: 'cooperative' },
+    { action: 'member:invite', scope: 'cooperative' },
+    { action: 'member:update', scope: 'cooperative' },
+    { action: 'member:remove', scope: 'cooperative' },
+    // Admins have full report access
+    { action: 'report:view', scope: 'cooperative' },
+    { action: 'report:export', scope: 'cooperative' },
+    // Admins can manage cooperative settings
+    { action: 'cooperative:read', scope: 'cooperative' },
+    { action: 'cooperative:update', scope: 'cooperative' },
+    { action: 'cooperative:manage_sharing', scope: 'cooperative' },
+  ],
+  cooperative_staff: [
+    // Staff can view all records in cooperative
+    { action: 'record:read', scope: 'cooperative' },
+    // Staff can manage demands
+    { action: 'demand:create', scope: 'cooperative' },
+    { action: 'demand:read', scope: 'cooperative' },
+    { action: 'demand:update', scope: 'cooperative' },
+    // Staff can view and create matches
+    { action: 'match:create', scope: 'cooperative' },
+    { action: 'match:read', scope: 'cooperative' },
+    // Staff can view members
+    { action: 'member:read', scope: 'cooperative' },
+    // Staff can view reports
+    { action: 'report:view', scope: 'cooperative' },
+    { action: 'report:export', scope: 'cooperative' },
+    // Staff can view cooperative info
+    { action: 'cooperative:read', scope: 'cooperative' },
+  ],
+  customer: [
+    // Customers can create and manage their own demands
+    { action: 'demand:create', scope: 'own' },
+    { action: 'demand:read', scope: 'own' },
+    { action: 'demand:update', scope: 'own' },
+    { action: 'demand:delete', scope: 'own' },
+    // Customers can view matches for their demands
+    { action: 'match:read', scope: 'own' },
+  ],
+};
+
+/**
+ * Tenant context for multi-tenant operations.
+ * This context is injected into all service operations.
+ */
+export interface TenantContext {
+  /** Current user ID */
+  userId: string;
+  /** Current user's role */
+  role: UserRole;
+  /** Cooperative ID (tenant identifier) */
+  cooperativeId: string;
+  /** User's locale preference */
+  locale: 'en' | 'zh-TW';
+}
+
+/**
+ * Extended context with resolved permissions.
+ */
+export interface AuthContext extends TenantContext {
+  /** User's permissions based on role */
+  permissions: Permission[];
+  /** Whether user is a cooperative admin */
+  isAdmin: boolean;
+  /** Check if user has a specific permission */
+  hasPermission: (action: PermissionAction, scope?: PermissionScope) => boolean;
+}
+
+/**
+ * Data sharing configuration for cross-cooperative access.
+ */
+export interface DataSharingConfig {
+  /** Cooperative ID that owns this config */
+  cooperativeId: string;
+  /** Whether to share aggregate supply data */
+  shareSupplyData: boolean;
+  /** Whether to allow receiving demands from other cooperatives */
+  acceptExternalDemands: boolean;
+  /** Specific cooperatives to share with (empty = share with all) */
+  sharedWithCooperatives: string[];
+  /** Last updated timestamp */
+  updatedAt: Date;
+}
+
+/**
+ * Cooperative onboarding request.
+ */
+export interface CooperativeOnboardingRequest {
+  /** Cooperative name */
+  name: string;
+  /** Unique code (for member join) */
+  code: string;
+  /** Region */
+  region: TaiwanRegion;
+  /** Contact email */
+  email?: string;
+  /** Contact phone */
+  phone?: string;
+  /** Address */
+  address?: string;
+  /** Initial admin user's LINE ID */
+  adminLineUserId: string;
+  /** Initial admin user's name */
+  adminName: string;
+}
+
+/**
+ * Result of cooperative onboarding.
+ */
+export interface CooperativeOnboardingResult {
+  /** Created cooperative ID */
+  cooperativeId: string;
+  /** Created admin user ID */
+  adminUserId: string;
+  /** Cooperative join code */
+  joinCode: string;
+  /** Success status */
+  success: boolean;
+  /** Error message if failed */
+  error?: string;
+}
+
+/**
+ * Member invitation for joining a cooperative.
+ */
+export interface MemberInvitation {
+  /** Invitation ID */
+  id: string;
+  /** Cooperative ID */
+  cooperativeId: string;
+  /** Inviter user ID */
+  invitedBy: string;
+  /** Invited role */
+  role: UserRole;
+  /** Invitation code (for manual entry) */
+  code: string;
+  /** Expiration date */
+  expiresAt: Date;
+  /** Whether invitation has been used */
+  used: boolean;
+  /** Created timestamp */
   createdAt: Date;
 }
 

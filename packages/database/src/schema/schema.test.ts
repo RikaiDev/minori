@@ -16,6 +16,9 @@ import {
   growthRecords,
   demands,
   matches,
+  dataSharingConfigs,
+  cooperativeSharingRelations,
+  memberInvitations,
   userRoleEnum,
   localeEnum,
   plantingStatusEnum,
@@ -25,6 +28,7 @@ import {
   demandPriorityEnum,
   matchStatusEnum,
   taiwanRegionEnum,
+  invitationStatusEnum,
 } from './index';
 
 describe('cooperatives table', () => {
@@ -133,7 +137,8 @@ describe('enums', () => {
   test('userRoleEnum has correct values', () => {
     expect(userRoleEnum.enumName).toBe('user_role');
     expect(userRoleEnum.enumValues).toContain('farmer');
-    expect(userRoleEnum.enumValues).toContain('cooperative');
+    expect(userRoleEnum.enumValues).toContain('cooperative_admin');
+    expect(userRoleEnum.enumValues).toContain('cooperative_staff');
     expect(userRoleEnum.enumValues).toContain('customer');
   });
 
@@ -247,5 +252,67 @@ describe('matches table', () => {
 
   test('table name is correct', () => {
     expect(getTableName(matches)).toBe('matches');
+  });
+});
+
+describe('dataSharingConfigs table', () => {
+  test('has required columns', () => {
+    const columns = Object.keys(dataSharingConfigs);
+    expect(columns).toContain('id');
+    expect(columns).toContain('cooperativeId');
+    expect(columns).toContain('shareSupplyData');
+    expect(columns).toContain('acceptExternalDemands');
+    expect(columns).toContain('shareFarmerProfiles');
+    expect(columns).toContain('createdAt');
+    expect(columns).toContain('updatedAt');
+  });
+
+  test('table name is correct', () => {
+    expect(getTableName(dataSharingConfigs)).toBe('data_sharing_configs');
+  });
+});
+
+describe('cooperativeSharingRelations table', () => {
+  test('has required columns', () => {
+    const columns = Object.keys(cooperativeSharingRelations);
+    expect(columns).toContain('id');
+    expect(columns).toContain('sharingCooperativeId');
+    expect(columns).toContain('receivingCooperativeId');
+    expect(columns).toContain('isActive');
+    expect(columns).toContain('createdAt');
+    expect(columns).toContain('updatedAt');
+  });
+
+  test('table name is correct', () => {
+    expect(getTableName(cooperativeSharingRelations)).toBe('cooperative_sharing_relations');
+  });
+});
+
+describe('memberInvitations table', () => {
+  test('has required columns', () => {
+    const columns = Object.keys(memberInvitations);
+    expect(columns).toContain('id');
+    expect(columns).toContain('cooperativeId');
+    expect(columns).toContain('invitedBy');
+    expect(columns).toContain('role');
+    expect(columns).toContain('code');
+    expect(columns).toContain('status');
+    expect(columns).toContain('expiresAt');
+    expect(columns).toContain('createdAt');
+    expect(columns).toContain('updatedAt');
+  });
+
+  test('table name is correct', () => {
+    expect(getTableName(memberInvitations)).toBe('member_invitations');
+  });
+});
+
+describe('invitationStatusEnum', () => {
+  test('has correct values', () => {
+    expect(invitationStatusEnum.enumName).toBe('invitation_status');
+    expect(invitationStatusEnum.enumValues).toContain('pending');
+    expect(invitationStatusEnum.enumValues).toContain('accepted');
+    expect(invitationStatusEnum.enumValues).toContain('expired');
+    expect(invitationStatusEnum.enumValues).toContain('cancelled');
   });
 });

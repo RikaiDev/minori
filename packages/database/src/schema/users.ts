@@ -11,8 +11,17 @@ import { createId } from '../utils';
 
 /**
  * User role enum.
+ * - farmer: Agricultural producers
+ * - cooperative_admin: Cooperative administrators with full access
+ * - cooperative_staff: Regular cooperative staff with limited access
+ * - customer: External buyers
  */
-export const userRoleEnum = pgEnum('user_role', ['farmer', 'cooperative', 'customer']);
+export const userRoleEnum = pgEnum('user_role', [
+  'farmer',
+  'cooperative_admin',
+  'cooperative_staff',
+  'customer',
+]);
 
 /**
  * Locale enum for internationalization.
