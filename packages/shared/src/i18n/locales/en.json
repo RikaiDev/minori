@@ -8,7 +8,8 @@
     "no": "No",
     "ok": "OK",
     "loading": "Loading...",
-    "retry": "Please try again"
+    "retry": "Please try again",
+    "askMoreDetail": "Could you please provide more details?"
   },
   "record": {
     "planting": {
@@ -46,7 +47,17 @@
   "intent": {
     "unknown": "Sorry, I don't understand what you mean.\n\nYou can try:\n• \"Planted 2 plots of bok choy today\"\n• \"Harvested 50 kg of tomatoes\"\n• \"What have I planted?\"",
     "confirmed": "✓ Got it!",
-    "cancelled": "OK, cancelled."
+    "cancelled": "OK, cancelled. Let me know if you need anything!",
+    "nothingToConfirm": "There's nothing to confirm right now.",
+    "noActiveConversation": "There's no active conversation."
+  },
+  "conversation": {
+    "confirm": {
+      "planting": "Confirm: Planted {area} plots of {crop}, correct?",
+      "harvest": "Confirm: Harvested {quantity} {unit} of {crop}, correct?",
+      "growth": "Confirm: Recording growth status for {crop}, correct?",
+      "default": "Confirm the above information, correct?"
+    }
   },
   "help": {
     "title": "🌾 minori User Guide",

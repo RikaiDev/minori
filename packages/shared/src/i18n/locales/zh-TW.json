@@ -8,7 +8,8 @@
     "no": "否",
     "ok": "好",
     "loading": "載入中...",
-    "retry": "請再試一次"
+    "retry": "請再試一次",
+    "askMoreDetail": "請問可以說得更詳細一點嗎？"
   },
   "record": {
     "planting": {
@@ -46,7 +47,17 @@
   "intent": {
     "unknown": "抱歉，我不太理解您的意思。\n\n您可以試試：\n• 「今天種了兩分地的小白菜」\n• 「收了 50 公斤番茄」\n• 「我種了什麼」",
     "confirmed": "✓ 好的！",
-    "cancelled": "好的，已取消。"
+    "cancelled": "好的，已取消。有需要再跟我說！",
+    "nothingToConfirm": "目前沒有需要確認的內容。",
+    "noActiveConversation": "目前沒有進行中的對話。"
+  },
+  "conversation": {
+    "confirm": {
+      "planting": "確認：種了 {area} 分地的{crop}，對嗎？",
+      "harvest": "確認：收了 {quantity} {unit}的{crop}，對嗎？",
+      "growth": "確認：記錄{crop}的生長狀況，對嗎？",
+      "default": "確認以上資訊，對嗎？"
+    }
   },
   "help": {
     "title": "🌾 minori 使用說明",
