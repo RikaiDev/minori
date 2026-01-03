@@ -9,7 +9,50 @@ import OpenAI from 'openai';
 import type { ParsedIntent, IntentAction, ParsedEntities } from '@minori/shared';
 import { findCropByName } from '@minori/core';
 
-const openai = new OpenAI();
+let openaiClient: OpenAI | null = null;
+
+/**
+ * Gets or creates the OpenAI client instance.
+ * Uses lazy initialization to avoid errors when API key is not set during testing.
+ */
+function getOpenAIClient(): OpenAI {
+  if (!openaiClient) {
+    openaiClient = new OpenAI();
+  }
+  return openaiClient;
+}
+
+/** Confidence threshold below which we consider the intent ambiguous */
+export const CONFIDENCE_THRESHOLD = 0.7;
+
+/** Confidence threshold below which we mark as unknown */
+export const UNKNOWN_THRESHOLD = 0.3;
+
+/**
+ * Custom error class for intent parsing failures.
+ */
+export class IntentParseError extends Error {
+  constructor(
+    message: string,
+    public readonly code: IntentParseErrorCode,
+    public readonly originalError?: Error
+  ) {
+    super(message);
+    this.name = 'IntentParseError';
+  }
+}
+
+export type IntentParseErrorCode = 'API_ERROR' | 'PARSE_ERROR' | 'RATE_LIMITED' | 'UNKNOWN';
+
+/**
+ * Result type that includes clarification info for ambiguous intents.
+ */
+export interface ParseResult {
+  intent: ParsedIntent;
+  needsClarification: boolean;
+  clarificationQuestion?: string;
+  alternatives?: ParsedIntent[];
+}
 
 /**
  * System prompt for intent parsing.
@@ -40,18 +83,115 @@ Analyze farmer input and extract structured information.
 - 前天 → day before yesterday
 - 上禮拜、上週 → last week
 
+## Confidence Scoring
+- 1.0: Clear, unambiguous intent with all required info
+- 0.7-0.9: Intent clear but missing some optional info
+- 0.4-0.7: Intent somewhat unclear or missing key info
+- 0.0-0.4: Very unclear, likely unknown
+
+## Clarification
+If the input is ambiguous, include:
+- missingInfo: array of what information is needed
+- clarificationHint: suggested question to ask user
+
 Respond ONLY with JSON containing:
 - action: intent type
 - entities: { crop, area, areaUnit, quantity, quantityUnit, dateExpression, condition }
 - confidence: 0-1 confidence score
+- missingInfo: optional array of missing information
+- clarificationHint: optional clarification question in Traditional Chinese
 
 Return only JSON, no other text.`;
+
+/**
+ * Parses user input into a structured intent with clarification support.
+ *
+ * @param text - User's natural language input
+ * @returns Parse result with intent and clarification info
+ *
+ * @example
+ * ```typescript
+ * const result = await parseIntentWithClarification('種了小白菜');
+ * if (result.needsClarification) {
+ *   console.log(result.clarificationQuestion); // "請問種了多少面積？"
+ * }
+ * ```
+ */
+export async function parseIntentWithClarification(text: string): Promise<ParseResult> {
+  const intent = await parseIntent(text);
+
+  // Check if we need clarification
+  if (intent.confidence < CONFIDENCE_THRESHOLD && intent.action !== 'unknown') {
+    const clarificationQuestion = generateClarificationQuestion(intent);
+    return {
+      intent,
+      needsClarification: true,
+      clarificationQuestion,
+    };
+  }
+
+  // If confidence is very low, mark as needing clarification
+  if (intent.confidence < UNKNOWN_THRESHOLD) {
+    return {
+      intent,
+      needsClarification: true,
+      clarificationQuestion: '抱歉，我不太確定您的意思。請問您想要記錄種植、採收，還是查詢資料呢？',
+    };
+  }
+
+  return {
+    intent,
+    needsClarification: false,
+  };
+}
+
+/**
+ * Generates a clarification question based on missing information.
+ */
+function generateClarificationQuestion(intent: ParsedIntent): string {
+  const { action, entities } = intent;
+
+  switch (action) {
+    case 'record_planting':
+      if (!entities.crop) {
+        return '請問您種了什麼作物？';
+      }
+      if (!entities.area) {
+        return `請問${entities.crop}種了多少面積？`;
+      }
+      break;
+
+    case 'record_harvest':
+      if (!entities.crop) {
+        return '請問您採收了什麼作物？';
+      }
+      if (!entities.quantity) {
+        return `請問${entities.crop}收了多少？`;
+      }
+      break;
+
+    case 'query_forecast':
+      if (!entities.crop) {
+        return '請問您想查詢哪種作物的預計採收時間？';
+      }
+      break;
+
+    case 'query_price':
+      if (!entities.crop) {
+        return '請問您想查詢哪種作物的價格？';
+      }
+      break;
+  }
+
+  return '請問可以說得更詳細一點嗎？';
+}
 
 /**
  * Parses user input into a structured intent.
  *
  * @param text - User's natural language input
  * @returns Parsed intent with action, entities, and confidence
+ * @throws {IntentParseError} When parsing fails
  *
  * @example
  * ```typescript
@@ -64,27 +204,74 @@ Return only JSON, no other text.`;
  * ```
  */
 export async function parseIntent(text: string): Promise<ParsedIntent> {
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: text },
-    ],
-    response_format: { type: 'json_object' },
-    temperature: 0.1,
-  });
-
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
+  // Handle empty input
+  if (!text || text.trim().length === 0) {
     return createUnknownIntent(text);
   }
 
+  try {
+    const response = await getOpenAIClient().chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: text },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.1,
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return createUnknownIntent(text);
+    }
+
+    return parseResponse(content, text);
+  } catch (error) {
+    // Handle specific OpenAI errors
+    if (error instanceof OpenAI.APIError) {
+      if (error.status === 429) {
+        throw new IntentParseError('Rate limit exceeded', 'RATE_LIMITED', error);
+      }
+      throw new IntentParseError(`API error: ${error.message}`, 'API_ERROR', error);
+    }
+
+    // For other errors, return unknown intent rather than throwing
+    console.error('Intent parsing error:', error);
+    return createUnknownIntent(text);
+  }
+}
+
+/**
+ * Parses the LLM response into a structured intent.
+ */
+function parseResponse(content: string, rawText: string): ParsedIntent {
   try {
     const parsed = JSON.parse(content) as {
       action: IntentAction;
       entities: ParsedEntities;
       confidence: number;
+      missingInfo?: string[];
+      clarificationHint?: string;
     };
+
+    // Validate action
+    const validActions: IntentAction[] = [
+      'record_planting',
+      'record_growth',
+      'record_harvest',
+      'query_crops',
+      'query_forecast',
+      'query_price',
+      'confirm',
+      'cancel',
+      'help',
+      'unknown',
+    ];
+
+    if (!validActions.includes(parsed.action)) {
+      parsed.action = 'unknown';
+      parsed.confidence = 0;
+    }
 
     // Try to match crop name to database
     if (parsed.entities.crop) {
@@ -99,14 +286,17 @@ export async function parseIntent(text: string): Promise<ParsedIntent> {
       parsed.entities.date = parseDateExpression(parsed.entities.dateExpression);
     }
 
+    // Normalize confidence to 0-1 range
+    const confidence = Math.max(0, Math.min(1, parsed.confidence ?? 0));
+
     return {
       action: parsed.action,
       entities: parsed.entities,
-      confidence: parsed.confidence,
-      rawText: text,
+      confidence,
+      rawText,
     };
   } catch {
-    return createUnknownIntent(text);
+    return createUnknownIntent(rawText);
   }
 }
 
@@ -128,7 +318,7 @@ function createUnknownIntent(text: string): ParsedIntent {
  * @param expression - Date expression in Chinese
  * @returns Parsed Date object
  */
-function parseDateExpression(expression: string): Date {
+export function parseDateExpression(expression: string): Date {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -146,6 +336,49 @@ function parseDateExpression(expression: string): Date {
   if (expr.includes('上禮拜') || expr.includes('上週')) {
     return new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
   }
+  if (expr.includes('這禮拜') || expr.includes('這週')) {
+    return today;
+  }
 
   return today;
+}
+
+/**
+ * Checks if an intent requires specific entities to be complete.
+ *
+ * @param intent - Parsed intent to check
+ * @returns Array of missing required entities
+ */
+export function getMissingEntities(intent: ParsedIntent): string[] {
+  const missing: string[] = [];
+  const { action, entities } = intent;
+
+  switch (action) {
+    case 'record_planting':
+      if (!entities.crop) missing.push('crop');
+      if (!entities.area) missing.push('area');
+      break;
+
+    case 'record_harvest':
+      if (!entities.crop) missing.push('crop');
+      if (!entities.quantity) missing.push('quantity');
+      break;
+
+    case 'query_price':
+    case 'query_forecast':
+      // These work better with crop specified, but not strictly required
+      break;
+  }
+
+  return missing;
+}
+
+/**
+ * Determines if an intent is complete (has all required entities).
+ *
+ * @param intent - Parsed intent to check
+ * @returns true if the intent has all required entities
+ */
+export function isIntentComplete(intent: ParsedIntent): boolean {
+  return getMissingEntities(intent).length === 0;
 }
