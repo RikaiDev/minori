@@ -9,10 +9,6 @@ concurrency:
   group: staging-deploy
   cancel-in-progress: true
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
 jobs:
   validate:
     name: Validate
@@ -38,127 +34,30 @@ jobs:
       - name: Run tests
         run: bun run test
 
-  build:
-    name: Build Container
+  deploy:
+    name: Deploy to Render
     runs-on: ubuntu-latest
     needs: validate
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      image: ${{ steps.build.outputs.imageid }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix=
-
-      - name: Build and push
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  deploy:
-    name: Deploy
-    runs-on: ubuntu-latest
-    needs: build
     environment: staging
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # ===========================================
-      # Option 1: Railway Deployment
-      # Uncomment and configure RAILWAY_TOKEN secret
-      # ===========================================
-      # - name: Install Railway CLI
-      #   run: npm install -g @railway/cli
-
-      # - name: Deploy to Railway
-      #   run: railway up --service minori-api
-      #   env:
-      #     RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-
-      # ===========================================
-      # Option 2: Fly.io Deployment
-      # Uncomment and configure FLY_API_TOKEN secret
-      # ===========================================
-      # - name: Install Fly CLI
-      #   uses: superfly/flyctl-actions/setup-flyctl@master
-
-      # - name: Deploy to Fly.io
-      #   run: flyctl deploy --remote-only
-      #   env:
-      #     FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      # ===========================================
-      # Option 3: Google Cloud Run Deployment
-      # Uncomment and configure GCP secrets
-      # ===========================================
-      # - name: Authenticate to Google Cloud
-      #   uses: google-github-actions/auth@v2
-      #   with:
-      #     credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      # - name: Set up Cloud SDK
-      #   uses: google-github-actions/setup-gcloud@v2
-
-      # - name: Deploy to Cloud Run
-      #   run: |
-      #     gcloud run deploy minori-api \
-      #       --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
-      #       --region asia-east1 \
-      #       --platform managed \
-      #       --allow-unauthenticated
-
-      # ===========================================
-      # Option 4: Render Deployment (via webhook)
-      # Uncomment and configure RENDER_DEPLOY_HOOK_URL secret
-      # ===========================================
-      # - name: Deploy to Render
-      #   run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-
-      # ===========================================
-      # Placeholder - Configure your provider above
-      # ===========================================
-      - name: Deploy to staging
+      - name: Trigger Render Deploy
         run: |
-          echo "🚀 Deploying to staging..."
-          echo "Container image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          echo ""
-          echo "⚠️  No deployment provider configured."
-          echo "Please uncomment one of the deployment options in the workflow file."
-          echo ""
-          echo "Available options:"
-          echo "  - Railway (RAILWAY_TOKEN secret required)"
-          echo "  - Fly.io (FLY_API_TOKEN secret required)"
-          echo "  - Google Cloud Run (GCP_SA_KEY secret required)"
-          echo "  - Render (RENDER_DEPLOY_HOOK_URL secret required)"
+          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            echo "🚀 Triggering Render deployment..."
+            curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+            echo ""
+            echo "✅ Deploy triggered! Render will build and deploy automatically."
+          else
+            echo "⚠️  RENDER_DEPLOY_HOOK_URL secret not configured."
+            echo ""
+            echo "To set up Render deployment:"
+            echo "1. Create a Web Service on Render using this repo"
+            echo "2. Go to Settings > Deploy Hook"
+            echo "3. Copy the deploy hook URL"
+            echo "4. Add it as RENDER_DEPLOY_HOOK_URL secret in GitHub"
+            exit 1
+          fi
 
-  # Database migration job (runs after successful deploy)
   migrate:
     name: Run Migrations
     runs-on: ubuntu-latest
@@ -180,7 +79,7 @@ jobs:
       - name: Run database migrations
         run: |
           if [ -n "$DATABASE_URL" ]; then
-            echo "🗄️  Running database migrations..."
+            echo "🗄️  Running database migrations on Neon..."
             bun run db:migrate
             echo "✅ Database migrations complete!"
           else
@@ -196,15 +95,29 @@ jobs:
     if: success()
     environment: staging
     steps:
-      - name: Wait for deployment
-        run: sleep 30
+      - name: Wait for Render deployment
+        run: |
+          echo "⏳ Waiting 60s for Render to complete deployment..."
+          sleep 60
 
       - name: Check health endpoint
         run: |
           if [ -n "${{ secrets.STAGING_URL }}" ]; then
             echo "🏥 Checking health at ${{ secrets.STAGING_URL }}/health..."
-            curl -f "${{ secrets.STAGING_URL }}/health" || exit 1
-            echo "✅ Health check passed!"
+
+            # Retry up to 5 times (Render free tier can be slow to wake)
+            for i in 1 2 3 4 5; do
+              if curl -sf "${{ secrets.STAGING_URL }}/health" > /dev/null; then
+                echo "✅ Health check passed!"
+                curl -s "${{ secrets.STAGING_URL }}/health" | head -c 500
+                exit 0
+              fi
+              echo "Attempt $i failed, retrying in 15s..."
+              sleep 15
+            done
+
+            echo "❌ Health check failed after 5 attempts"
+            exit 1
           else
             echo "⚠️  STAGING_URL secret not configured. Skipping health check."
           fi

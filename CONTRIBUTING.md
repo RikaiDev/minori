@@ -164,6 +164,54 @@ bun run test --watch
 bun test packages/core/src/crops/crop-database.test.ts
 ```
 
+## Deployment
+
+minori uses **Render** for hosting and **Neon** for PostgreSQL database.
+
+### Setting Up Neon Database
+
+1. Create a free account at [neon.tech](https://neon.tech)
+2. Create a new project (select Singapore region for Taiwan users)
+3. Copy the connection string from the dashboard
+4. Add `DATABASE_URL` to your environment:
+   ```bash
+   # Local development
+   echo "DATABASE_URL=postgresql://..." >> .env
+
+   # Production - add to Render dashboard
+   ```
+
+5. Run migrations:
+   ```bash
+   bun run db:migrate
+   ```
+
+### Setting Up Render
+
+1. Create a free account at [render.com](https://render.com)
+2. Connect your GitHub repository
+3. Use the Blueprint (render.yaml) for automatic configuration:
+   - Go to Dashboard > New > Blueprint
+   - Select the minori repository
+4. Configure environment variables in Render dashboard:
+   - `DATABASE_URL` — Neon connection string
+   - `LINE_CHANNEL_SECRET`
+   - `LINE_CHANNEL_ACCESS_TOKEN`
+   - `OPENAI_API_KEY`
+   - `CWA_API_KEY` (optional)
+
+5. Set up GitHub Actions deployment:
+   - In Render: Settings > Deploy Hook > Copy URL
+   - In GitHub: Settings > Secrets > Add `RENDER_DEPLOY_HOOK_URL`
+   - Add `STAGING_URL` secret (e.g., `https://minori-api.onrender.com`)
+   - Add `DATABASE_URL` secret for migrations
+
+### Deployment Flow
+
+```
+Push to main → GitHub Actions → Validate (lint/test) → Trigger Render Deploy → Run Migrations → Health Check
+```
+
 ## Documentation
 
 - Update README.md for user-facing changes
