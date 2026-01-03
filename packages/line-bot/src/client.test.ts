@@ -13,19 +13,21 @@ describe('createQuickReply', () => {
     ];
 
     const quickReply = createQuickReply(buttons);
+    const items = quickReply.items!;
 
-    expect(quickReply.items).toBeDefined();
-    expect(quickReply.items.length).toBe(2);
-    expect(quickReply.items[0]!.type).toBe('action');
+    expect(items).toBeDefined();
+    expect(items.length).toBe(2);
+    expect(items[0]!.type).toBe('action');
   });
 
   test('uses label as text if text not provided', () => {
     const buttons: QuickReplyButton[] = [{ label: '說明' }];
 
     const quickReply = createQuickReply(buttons);
+    const items = quickReply.items!;
 
-    expect(quickReply.items[0]!.action).toBeDefined();
-    const action = quickReply.items[0]!.action as { text: string };
+    expect(items[0]!.action).toBeDefined();
+    const action = items[0]!.action as { text: string };
     expect(action.text).toBe('說明');
   });
 
@@ -33,8 +35,9 @@ describe('createQuickReply', () => {
     const buttons: QuickReplyButton[] = [{ label: '這是一個非常長的標籤文字超過二十個字元' }];
 
     const quickReply = createQuickReply(buttons);
+    const items = quickReply.items!;
 
-    const action = quickReply.items[0]!.action as { label: string };
+    const action = items[0]!.action as { label: string };
     expect(action.label.length).toBeLessThanOrEqual(20);
   });
 
@@ -44,8 +47,9 @@ describe('createQuickReply', () => {
     ];
 
     const quickReply = createQuickReply(buttons);
+    const items = quickReply.items!;
 
-    expect(quickReply.items[0]!.imageUrl).toBe('https://example.com/icon.png');
+    expect(items[0]!.imageUrl).toBe('https://example.com/icon.png');
   });
 });
 

@@ -38,9 +38,23 @@
       "developing": "📋 查詢功能開發中，敬請期待！"
     },
     "forecast": {
+      "askCrop": "請問您要查詢哪種作物的採收預測？",
+      "cropNotFound": "抱歉，找不到「{crop}」的資料。請試試其他作物名稱。",
+      "title": "📅 {crop} 採收預測",
+      "prediction": "預計採收時間：\n• 最早：{earliest}\n• 可能：{likely}\n• 最晚：{latest}",
+      "confidence": "預測信心度：{confidence}%",
+      "optimalTemp": "🌡️ 最佳生長溫度：{temp}°C",
       "developing": "📅 預測功能開發中，敬請期待！"
     },
     "price": {
+      "askCrop": "請問您要查詢哪種作物的價格？",
+      "cropNotFound": "抱歉，找不到「{crop}」的價格資料。請試試其他作物名稱。",
+      "title": "💰 {crop} 目前價格",
+      "current": "目前價格：{price} 元/公斤",
+      "trend": "{icon} 本週變化：{change}%",
+      "range": "價格區間：{low} - {high} 元/公斤",
+      "noData": "抱歉，目前沒有 {crop} 的價格資料。",
+      "error": "抱歉，查詢價格時發生錯誤，請稍後再試。",
       "developing": "💰 價格查詢功能開發中，敬請期待！"
     }
   },

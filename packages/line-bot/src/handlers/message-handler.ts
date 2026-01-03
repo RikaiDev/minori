@@ -3,6 +3,7 @@
  *
  * Handles incoming webhook events from LINE and routes them
  * to appropriate handlers based on message type.
+ * Supports multi-turn conversations with confirmation flow.
  */
 
 import type { webhook } from '@line/bot-sdk';
@@ -16,10 +17,10 @@ import {
   QuickReplyPresets,
   type QuickReplyButton,
 } from '../client';
-import { parseIntent } from '@minori/ai-engine';
-import { findCropByName, predictHarvest } from '@minori/core';
+import { parseIntent, ConversationManager, type ProcessMessageResult } from '@minori/ai-engine';
+import { findCropByName, predictHarvest, getCropById, PriceService } from '@minori/core';
 import { t, formatDate } from '@minori/shared';
-import type { ParsedIntent } from '@minori/shared';
+import type { ParsedIntent, ParsedEntities } from '@minori/shared';
 
 /**
  * Response with optional quick reply buttons.
@@ -28,6 +29,11 @@ interface MessageResponse {
   text: string;
   quickReply?: QuickReplyButton[];
 }
+
+/**
+ * Singleton conversation manager instance.
+ */
+const conversationManager = new ConversationManager();
 
 /**
  * Handles a webhook event from LINE.
@@ -79,11 +85,20 @@ async function handleTextMessage(
   }
 
   try {
+    // Record user message in history
+    await conversationManager.recordUserMessage(userId, text);
+
     // Parse intent from text
     const intent = await parseIntent(text);
 
-    // Execute action based on intent
-    const response = await executeIntent(intent, userId);
+    // Process through conversation manager for multi-turn support
+    const result = await conversationManager.processIntent(userId, intent);
+
+    // Handle the result
+    const response = await handleConversationResult(result, intent, userId);
+
+    // Record assistant response in history
+    await conversationManager.recordAssistantMessage(userId, response.text);
 
     // Reply with or without quick reply buttons
     if (response.quickReply && response.quickReply.length > 0) {
@@ -98,37 +113,105 @@ async function handleTextMessage(
 }
 
 /**
- * Executes the action corresponding to the parsed intent.
+ * Handles the result from the conversation manager.
  *
- * @param intent - Parsed intent from user input
- * @param _userId - LINE user ID (for future use)
- * @returns Response with text and optional quick reply buttons
+ * @param result - Result from processIntent
+ * @param intent - Original parsed intent
+ * @param userId - LINE user ID
+ * @returns Message response with text and quick reply buttons
  */
-async function executeIntent(intent: ParsedIntent, _userId: string): Promise<MessageResponse> {
-  switch (intent.action) {
+async function handleConversationResult(
+  result: ProcessMessageResult,
+  intent: ParsedIntent,
+  userId: string
+): Promise<MessageResponse> {
+  // If conversation is complete, execute the action
+  if (result.isComplete && result.action) {
+    return executeAction(result.action, result.entities || {}, userId);
+  }
+
+  // If needs clarification, return with appropriate quick replies
+  if (result.needsClarification) {
+    return {
+      text: result.response,
+      quickReply: getQuickReplyForMissingField(result.state.missingFields[0], intent.action),
+    };
+  }
+
+  // If in confirming phase, show confirmation with confirm/cancel buttons
+  if (result.state.phase === 'confirming') {
+    return {
+      text: result.response,
+      quickReply: QuickReplyPresets.confirm(),
+    };
+  }
+
+  // Default response (help, cancelled, etc.)
+  return {
+    text: result.response || t('intent.unknown'),
+    quickReply: QuickReplyPresets.mainMenu(),
+  };
+}
+
+/**
+ * Gets quick reply buttons based on the missing field.
+ */
+function getQuickReplyForMissingField(
+  missingField: string | undefined,
+  _action: string
+): QuickReplyButton[] {
+  if (!missingField) {
+    return QuickReplyPresets.helpCancel();
+  }
+
+  switch (missingField) {
+    case 'crop':
+      return QuickReplyPresets.commonCrops();
+    case 'area':
+      return QuickReplyPresets.areaUnits();
+    case 'quantity':
+      return [
+        { label: '10公斤', text: '10公斤' },
+        { label: '20公斤', text: '20公斤' },
+        { label: '50公斤', text: '50公斤' },
+        { label: '100公斤', text: '100公斤' },
+      ];
+    default:
+      return QuickReplyPresets.helpCancel();
+  }
+}
+
+/**
+ * Executes the completed action.
+ *
+ * @param action - Action to execute
+ * @param entities - Collected entities
+ * @param userId - LINE user ID
+ * @returns Response message
+ */
+async function executeAction(
+  action: string,
+  entities: Partial<ParsedEntities>,
+  userId: string
+): Promise<MessageResponse> {
+  switch (action) {
     case 'record_planting':
-      return handleRecordPlanting(intent);
+      return handleRecordPlanting(entities);
 
     case 'record_harvest':
-      return handleRecordHarvest(intent);
+      return handleRecordHarvest(entities);
+
+    case 'record_growth':
+      return handleRecordGrowth(entities);
 
     case 'query_crops':
-      return {
-        text: t('query.crops.developing'),
-        quickReply: QuickReplyPresets.mainMenu(),
-      };
+      return handleQueryCrops(userId);
 
     case 'query_forecast':
-      return {
-        text: t('query.forecast.developing'),
-        quickReply: QuickReplyPresets.mainMenu(),
-      };
+      return handleQueryForecast(entities);
 
     case 'query_price':
-      return {
-        text: t('query.price.developing'),
-        quickReply: QuickReplyPresets.mainMenu(),
-      };
+      return handleQueryPrice(entities);
 
     case 'confirm':
       return {
@@ -158,32 +241,23 @@ async function executeIntent(intent: ParsedIntent, _userId: string): Promise<Mes
 }
 
 /**
- * Handles planting record intent.
+ * Handles planting record action.
  *
- * @param intent - Parsed intent with planting information
+ * @param entities - Collected entities
  * @returns Response with text and quick reply buttons
  */
-function handleRecordPlanting(intent: ParsedIntent): MessageResponse {
-  const { crop, area, areaUnit, cropId } = intent.entities;
+function handleRecordPlanting(entities: Partial<ParsedEntities>): MessageResponse {
+  const { crop, area, areaUnit } = entities;
 
-  // Ask for crop if not provided
-  if (!crop) {
+  if (!crop || !area) {
     return {
-      text: t('record.planting.askCrop'),
-      quickReply: QuickReplyPresets.commonCrops(),
-    };
-  }
-
-  // Ask for area if not provided
-  if (!area) {
-    return {
-      text: t('record.planting.askArea', { crop }),
-      quickReply: QuickReplyPresets.areaUnits(),
+      text: t('intent.unknown'),
+      quickReply: QuickReplyPresets.mainMenu(),
     };
   }
 
   // Get crop info for prediction
-  const cropInfo = cropId ? findCropByName(crop) : undefined;
+  const cropInfo = findCropByName(crop);
 
   let response = t('record.planting.success', {
     crop,
@@ -201,6 +275,8 @@ function handleRecordPlanting(intent: ParsedIntent): MessageResponse {
       '\n' + t('record.planting.optimalTemp', { temp: cropInfo.growth.temperatureOptimal });
   }
 
+  // TODO: Save record to database
+
   return {
     text: response,
     quickReply: QuickReplyPresets.afterPlanting(),
@@ -208,32 +284,18 @@ function handleRecordPlanting(intent: ParsedIntent): MessageResponse {
 }
 
 /**
- * Handles harvest record intent.
+ * Handles harvest record action.
  *
- * @param intent - Parsed intent with harvest information
+ * @param entities - Collected entities
  * @returns Response with text and quick reply buttons
  */
-function handleRecordHarvest(intent: ParsedIntent): MessageResponse {
-  const { crop, quantity, quantityUnit } = intent.entities;
+function handleRecordHarvest(entities: Partial<ParsedEntities>): MessageResponse {
+  const { crop, quantity, quantityUnit } = entities;
 
-  // Ask for crop if not provided
-  if (!crop) {
+  if (!crop || !quantity) {
     return {
-      text: t('record.harvest.askCrop'),
-      quickReply: QuickReplyPresets.commonCrops(),
-    };
-  }
-
-  // Ask for quantity if not provided
-  if (!quantity) {
-    return {
-      text: t('record.harvest.askQuantity', { crop }),
-      quickReply: [
-        { label: '10公斤', text: '10公斤' },
-        { label: '20公斤', text: '20公斤' },
-        { label: '50公斤', text: '50公斤' },
-        { label: '100公斤', text: '100公斤' },
-      ],
+      text: t('intent.unknown'),
+      quickReply: QuickReplyPresets.mainMenu(),
     };
   }
 
@@ -245,10 +307,194 @@ function handleRecordHarvest(intent: ParsedIntent): MessageResponse {
 
   response += '\n\n' + t('record.harvest.notifyCooperative');
 
+  // TODO: Save record to database
+
   return {
     text: response,
     quickReply: QuickReplyPresets.afterHarvest(),
   };
+}
+
+/**
+ * Handles growth record action.
+ *
+ * @param entities - Collected entities
+ * @returns Response with text and quick reply buttons
+ */
+function handleRecordGrowth(entities: Partial<ParsedEntities>): MessageResponse {
+  const { crop, condition: _condition } = entities;
+
+  if (!crop) {
+    return {
+      text: t('intent.unknown'),
+      quickReply: QuickReplyPresets.mainMenu(),
+    };
+  }
+
+  const response = t('record.growth.success', { crop });
+
+  // TODO: Save record to database with condition
+
+  return {
+    text: response,
+    quickReply: QuickReplyPresets.mainMenu(),
+  };
+}
+
+/**
+ * Handles crop query action.
+ * Shows the user's recorded crops with harvest predictions.
+ *
+ * @param userId - LINE user ID
+ * @returns Response with crop list
+ */
+async function handleQueryCrops(_userId: string): Promise<MessageResponse> {
+  // TODO: Fetch actual records from database
+  // For now, return a demo response
+
+  // Check if user has any records (placeholder)
+  const hasRecords = false;
+
+  if (!hasRecords) {
+    return {
+      text: t('query.crops.empty') + '\n\n' + t('help.recording'),
+      quickReply: QuickReplyPresets.mainMenu(),
+    };
+  }
+
+  // TODO: Build actual crop list from database records
+  const cropList = t('query.crops.title');
+
+  return {
+    text: cropList,
+    quickReply: QuickReplyPresets.mainMenu(),
+  };
+}
+
+/**
+ * Handles forecast query action.
+ * Shows harvest prediction for a specific crop.
+ *
+ * @param entities - Collected entities (may include crop)
+ * @returns Response with forecast
+ */
+async function handleQueryForecast(entities: Partial<ParsedEntities>): Promise<MessageResponse> {
+  const { crop, cropId } = entities;
+
+  // If no crop specified, show general help
+  if (!crop) {
+    return {
+      text: t('query.forecast.askCrop'),
+      quickReply: QuickReplyPresets.commonCrops(),
+    };
+  }
+
+  // Get crop info
+  const cropInfo = cropId ? getCropById(cropId) : findCropByName(crop);
+
+  if (!cropInfo) {
+    return {
+      text: t('query.forecast.cropNotFound', { crop }),
+      quickReply: QuickReplyPresets.commonCrops(),
+    };
+  }
+
+  // Calculate prediction (assuming planting today)
+  const prediction = predictHarvest(cropInfo, new Date());
+
+  const response = [
+    t('query.forecast.title', { crop: cropInfo.name }),
+    '',
+    t('query.forecast.prediction', {
+      earliest: formatDate(prediction.predictions.earliest),
+      likely: formatDate(prediction.predictions.likely),
+      latest: formatDate(prediction.predictions.latest),
+    }),
+    '',
+    t('query.forecast.confidence', {
+      confidence: Math.round(prediction.confidence * 100),
+    }),
+    '',
+    t('query.forecast.optimalTemp', {
+      temp: cropInfo.growth.temperatureOptimal,
+    }),
+  ].join('\n');
+
+  return {
+    text: response,
+    quickReply: QuickReplyPresets.mainMenu(),
+  };
+}
+
+/**
+ * Handles price query action.
+ * Shows current market prices for a crop.
+ *
+ * @param entities - Collected entities (may include crop)
+ * @returns Response with price info
+ */
+async function handleQueryPrice(entities: Partial<ParsedEntities>): Promise<MessageResponse> {
+  const { crop, cropId } = entities;
+
+  // If no crop specified, ask which crop
+  if (!crop) {
+    return {
+      text: t('query.price.askCrop'),
+      quickReply: QuickReplyPresets.commonCrops(),
+    };
+  }
+
+  // Get crop info
+  const cropInfo = cropId ? getCropById(cropId) : findCropByName(crop);
+
+  if (!cropInfo) {
+    return {
+      text: t('query.price.cropNotFound', { crop }),
+      quickReply: QuickReplyPresets.commonCrops(),
+    };
+  }
+
+  try {
+    // Get price data
+    const priceService = new PriceService();
+    const stats = await priceService.getCropPriceStats(cropInfo.name);
+
+    if (!stats) {
+      return {
+        text: t('query.price.noData', { crop: cropInfo.name }),
+        quickReply: QuickReplyPresets.mainMenu(),
+      };
+    }
+
+    const trendIcon = stats.trend === 'up' ? '📈' : stats.trend === 'down' ? '📉' : '➡️';
+    const changeSign = stats.weeklyChange >= 0 ? '+' : '';
+
+    const response = [
+      t('query.price.title', { crop: cropInfo.name }),
+      '',
+      t('query.price.current', { price: stats.currentPrice.toFixed(1) }),
+      t('query.price.trend', {
+        icon: trendIcon,
+        change: `${changeSign}${stats.weeklyChange.toFixed(1)}`,
+      }),
+      '',
+      t('query.price.range', {
+        low: stats.priceLow.toFixed(1),
+        high: stats.priceHigh.toFixed(1),
+      }),
+    ].join('\n');
+
+    return {
+      text: response,
+      quickReply: QuickReplyPresets.mainMenu(),
+    };
+  } catch (error) {
+    console.error('Error fetching price:', error);
+    return {
+      text: t('query.price.error'),
+      quickReply: QuickReplyPresets.mainMenu(),
+    };
+  }
 }
 
 /**
@@ -271,4 +517,11 @@ function getHelpMessage(): string {
     '',
     t('help.closing'),
   ].join('\n');
+}
+
+/**
+ * Gets the conversation manager instance (for testing).
+ */
+export function getConversationManager(): ConversationManager {
+  return conversationManager;
 }

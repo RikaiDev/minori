@@ -38,9 +38,23 @@
       "developing": "📋 Query feature is under development!"
     },
     "forecast": {
+      "askCrop": "Which crop would you like to see the harvest forecast for?",
+      "cropNotFound": "Sorry, couldn't find data for \"{crop}\". Please try another crop name.",
+      "title": "📅 {crop} Harvest Forecast",
+      "prediction": "Expected harvest time:\n• Earliest: {earliest}\n• Likely: {likely}\n• Latest: {latest}",
+      "confidence": "Prediction confidence: {confidence}%",
+      "optimalTemp": "🌡️ Optimal growing temperature: {temp}°C",
       "developing": "📅 Forecast feature is under development!"
     },
     "price": {
+      "askCrop": "Which crop's price would you like to check?",
+      "cropNotFound": "Sorry, couldn't find price data for \"{crop}\". Please try another crop name.",
+      "title": "💰 {crop} Current Price",
+      "current": "Current price: ${price}/kg",
+      "trend": "{icon} Weekly change: {change}%",
+      "range": "Price range: ${low} - ${high}/kg",
+      "noData": "Sorry, there's no price data available for {crop} at the moment.",
+      "error": "Sorry, an error occurred while fetching price data. Please try again later.",
       "developing": "💰 Price query feature is under development!"
     }
   },
