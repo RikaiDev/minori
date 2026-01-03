@@ -5,5 +5,15 @@
  * Integrates with Taiwan's Central Weather Administration (CWA) API.
  */
 
-export { CWAClient, CWAClientError, type CWAWeatherForecast } from './cwa-client';
+export {
+  CWAClient,
+  CWAClientError,
+  TAIWAN_COUNTIES,
+  type CWAWeatherForecast,
+  type CWAWeatherAlert,
+  type WeatherAlertType,
+  type AgriculturalAdvisory,
+  type CurrentWeather,
+} from './cwa-client';
+
 export { WeatherService, createWeatherService, type WeatherServiceConfig } from './weather-service';

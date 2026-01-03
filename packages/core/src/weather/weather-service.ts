@@ -2,11 +2,18 @@
  * Weather Service
  *
  * High-level service for fetching and processing weather data for agricultural use.
- * Provides weather forecasts in a format suitable for harvest prediction.
+ * Provides weather forecasts, alerts, and current conditions for harvest prediction
+ * and agricultural planning.
  */
 
 import type { TaiwanRegion } from '@minori/shared';
-import { CWAClient, CWAClientError, type CWAWeatherForecast } from './cwa-client';
+import {
+  CWAClient,
+  CWAClientError,
+  type CWAWeatherForecast,
+  type CWAWeatherAlert,
+  type CurrentWeather,
+} from './cwa-client';
 import type { WeatherData } from '../prediction/harvest-predictor';
 
 /**
@@ -17,15 +24,15 @@ export interface WeatherServiceConfig {
   apiKey?: string;
   /** Enable caching of weather data */
   enableCache?: boolean;
-  /** Cache TTL in milliseconds (default: 1 hour) */
+  /** Cache TTL in milliseconds (default: 3 hours) */
   cacheTTL?: number;
 }
 
 /**
  * Cached weather data entry.
  */
-interface CacheEntry {
-  data: WeatherData[];
+interface CacheEntry<T = WeatherData[]> {
+  data: T;
   timestamp: number;
 }
 
@@ -34,15 +41,19 @@ interface CacheEntry {
  */
 export class WeatherService {
   private client: CWAClient;
-  private cache: Map<string, CacheEntry>;
+  private cache: Map<string, CacheEntry<WeatherData[]>>;
+  private alertCache: Map<string, CacheEntry<CWAWeatherAlert[]>>;
+  private currentWeatherCache: Map<string, CacheEntry<CurrentWeather[]>>;
   private cacheTTL: number;
   private enableCache: boolean;
 
   constructor(config: WeatherServiceConfig = {}) {
     this.client = new CWAClient(config.apiKey);
     this.cache = new Map();
+    this.alertCache = new Map();
+    this.currentWeatherCache = new Map();
     this.enableCache = config.enableCache ?? true;
-    this.cacheTTL = config.cacheTTL ?? 60 * 60 * 1000; // 1 hour default
+    this.cacheTTL = config.cacheTTL ?? 3 * 60 * 60 * 1000; // 3 hours default
   }
 
   /**
@@ -221,10 +232,187 @@ export class WeatherService {
   }
 
   /**
+   * Fetches weather forecast for a specific township.
+   *
+   * @param county - County name (e.g., '彰化縣', '高雄市')
+   * @param township - Township name (e.g., '員林市', '美濃區')
+   * @returns Array of weather data for the forecast period
+   */
+  async getTownshipForecast(county: string, township: string): Promise<WeatherData[]> {
+    const cacheKey = `township:${county}:${township}`;
+
+    // Check cache first
+    if (this.enableCache) {
+      const cached = this.cache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
+        return cached.data;
+      }
+    }
+
+    try {
+      const forecasts = await this.client.getTownshipForecast(county, township);
+      const weatherData = this.convertToWeatherData(forecasts);
+
+      // Update cache
+      if (this.enableCache) {
+        this.cache.set(cacheKey, {
+          data: weatherData,
+          timestamp: Date.now(),
+        });
+      }
+
+      return weatherData;
+    } catch (error) {
+      if (error instanceof CWAClientError) {
+        console.warn(`Weather service error: ${error.message} (${error.code})`);
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Fetches active weather alerts from CWA.
+   *
+   * @returns Array of active weather alerts
+   */
+  async getWeatherAlerts(): Promise<CWAWeatherAlert[]> {
+    const cacheKey = 'alerts';
+
+    // Check cache first (use shorter TTL for alerts: 30 minutes)
+    if (this.enableCache) {
+      const cached = this.alertCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < 30 * 60 * 1000) {
+        return cached.data;
+      }
+    }
+
+    try {
+      const alerts = await this.client.getWeatherAlerts();
+
+      // Update cache
+      if (this.enableCache) {
+        this.alertCache.set(cacheKey, {
+          data: alerts,
+          timestamp: Date.now(),
+        });
+      }
+
+      return alerts;
+    } catch (error) {
+      if (error instanceof CWAClientError) {
+        console.warn(`Weather alerts error: ${error.message} (${error.code})`);
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Gets weather alerts filtered by region or county.
+   *
+   * @param region - Taiwan region to filter by (optional)
+   * @param county - Specific county to filter by (optional)
+   * @returns Filtered weather alerts
+   */
+  async getAlertsForLocation(region?: TaiwanRegion, county?: string): Promise<CWAWeatherAlert[]> {
+    const alerts = await this.getWeatherAlerts();
+
+    if (!region && !county) {
+      return alerts;
+    }
+
+    // Map regions to counties for filtering
+    const regionCounties: Record<TaiwanRegion, string[]> = {
+      north: ['臺北市', '新北市', '基隆市', '桃園市', '新竹市', '新竹縣', '宜蘭縣'],
+      central: ['臺中市', '苗栗縣', '彰化縣', '南投縣', '雲林縣'],
+      south: ['臺南市', '高雄市', '嘉義市', '嘉義縣', '屏東縣'],
+      east: ['花蓮縣', '臺東縣'],
+    };
+
+    return alerts.filter((alert) => {
+      // Filter by specific county
+      if (county) {
+        return alert.affectedAreas.some((area) => area.includes(county));
+      }
+
+      // Filter by region
+      if (region) {
+        const counties = regionCounties[region];
+        return alert.affectedAreas.some((area) => counties.some((c) => area.includes(c)));
+      }
+
+      return true;
+    });
+  }
+
+  /**
+   * Fetches current weather observations.
+   *
+   * @param stationName - Weather station name (optional)
+   * @returns Array of current weather observations
+   */
+  async getCurrentWeather(stationName?: string): Promise<CurrentWeather[]> {
+    const cacheKey = stationName ? `current:${stationName}` : 'current:all';
+
+    // Check cache first (use shorter TTL for current weather: 15 minutes)
+    if (this.enableCache) {
+      const cached = this.currentWeatherCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < 15 * 60 * 1000) {
+        return cached.data;
+      }
+    }
+
+    try {
+      const weather = await this.client.getCurrentWeather(stationName);
+
+      // Update cache
+      if (this.enableCache) {
+        this.currentWeatherCache.set(cacheKey, {
+          data: weather,
+          timestamp: Date.now(),
+        });
+      }
+
+      return weather;
+    } catch (error) {
+      if (error instanceof CWAClientError) {
+        console.warn(`Current weather error: ${error.message} (${error.code})`);
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Checks if there are any active severe weather alerts.
+   *
+   * @returns True if there are warning-level alerts
+   */
+  async hasSevereAlerts(): Promise<boolean> {
+    const alerts = await this.getWeatherAlerts();
+    return alerts.some((alert) => alert.severity === 'warning');
+  }
+
+  /**
+   * Gets agricultural impact summary from active alerts.
+   *
+   * @returns Array of agricultural impact messages
+   */
+  async getAgriculturalImpacts(): Promise<string[]> {
+    const alerts = await this.getWeatherAlerts();
+    return alerts
+      .filter((alert) => alert.agriculturalImpact)
+      .map((alert) => alert.agriculturalImpact!);
+  }
+
+  /**
    * Clears the weather cache.
    */
   clearCache(): void {
     this.cache.clear();
+    this.alertCache.clear();
+    this.currentWeatherCache.clear();
   }
 }
 
