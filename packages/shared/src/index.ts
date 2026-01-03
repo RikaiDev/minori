@@ -14,9 +14,29 @@ export * from './i18n';
 // Crop Types
 // ============================================================
 
-export type CropCategory = 'leafy' | 'root' | 'gourd' | 'fruit' | 'grain';
+export type CropCategory = 'leafy' | 'root' | 'gourd' | 'fruit' | 'grain' | 'herb' | 'legume';
 
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
+
+/**
+ * Taiwan agricultural regions for regional variations.
+ */
+export type TaiwanRegion = 'north' | 'central' | 'south' | 'east';
+
+/**
+ * Regional adjustment for crop growth parameters.
+ */
+export interface RegionalAdjustment {
+  region: TaiwanRegion;
+  /** Days adjustment (positive = longer, negative = shorter) */
+  daysAdjustment?: number;
+  /** Season overrides for this region */
+  seasons?: Season[];
+  /** Yield multiplier (1.0 = no change, 1.2 = 20% more) */
+  yieldMultiplier?: number;
+  /** Region-specific notes */
+  notes?: string;
+}
 
 export interface CropInfo {
   id: string;
@@ -37,6 +57,12 @@ export interface CropInfo {
     variance: number;
   };
   commonPests: string[];
+  /** Common diseases affecting this crop */
+  commonDiseases?: string[];
+  /** Regional variations for different parts of Taiwan */
+  regions?: RegionalAdjustment[];
+  /** Planting tips and best practices */
+  plantingTips?: string[];
   notes?: string;
 }
 
