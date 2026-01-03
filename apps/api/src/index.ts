@@ -44,8 +44,32 @@ app.get('/', (c) => {
   });
 });
 
-app.get('/health', (c) => {
-  return c.json({ status: 'ok' });
+app.get('/health', async (c) => {
+  const checks: Record<string, 'ok' | 'error'> = {
+    api: 'ok',
+  };
+
+  // Check database connection if configured
+  if (process.env.DATABASE_URL) {
+    try {
+      const { checkDatabaseConnection } = await import('@minori/database');
+      const dbOk = await checkDatabaseConnection();
+      checks.database = dbOk ? 'ok' : 'error';
+    } catch {
+      checks.database = 'error';
+    }
+  }
+
+  const allOk = Object.values(checks).every((v) => v === 'ok');
+
+  return c.json(
+    {
+      status: allOk ? 'ok' : 'degraded',
+      checks,
+      timestamp: new Date().toISOString(),
+    },
+    allOk ? 200 : 503
+  );
 });
 
 // LINE Webhook endpoint

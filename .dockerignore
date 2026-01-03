@@ -1,0 +1,35 @@
+# Dependencies
+node_modules
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Test files
+*.test.ts
+**/*.test.ts
+coverage/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Build artifacts
+dist/
+.turbo/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db

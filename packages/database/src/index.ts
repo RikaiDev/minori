@@ -13,6 +13,7 @@ export {
   getDatabase,
   closeDatabase,
   checkConnection,
+  checkConnection as checkDatabaseConnection,
   getDatabaseUrl,
   type Database,
   type DatabaseConfig,

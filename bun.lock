@@ -24,6 +24,7 @@
         "@line/bot-sdk": "^9.6.0",
         "@minori/ai-engine": "workspace:*",
         "@minori/core": "workspace:*",
+        "@minori/database": "workspace:*",
         "@minori/line-bot": "workspace:*",
         "@minori/shared": "workspace:*",
         "hono": "^4.6.15",
