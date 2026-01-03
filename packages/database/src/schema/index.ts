@@ -10,4 +10,6 @@ export * from './fields';
 export * from './planting-records';
 export * from './harvest-records';
 export * from './growth-records';
+export * from './demands';
+export * from './matches';
 export * from './relations';

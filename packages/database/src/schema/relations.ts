@@ -12,12 +12,16 @@ import { fields } from './fields';
 import { plantingRecords } from './planting-records';
 import { harvestRecords } from './harvest-records';
 import { growthRecords } from './growth-records';
+import { demands } from './demands';
+import { matches } from './matches';
 
 /**
  * Cooperative relations.
  */
 export const cooperativesRelations = relations(cooperatives, ({ many }) => ({
   users: many(users),
+  demands: many(demands),
+  matches: many(matches),
 }));
 
 /**
@@ -31,6 +35,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   fields: many(fields),
   plantingRecords: many(plantingRecords),
   harvestRecords: many(harvestRecords),
+  demands: many(demands),
+  matchesAsFarmer: many(matches),
 }));
 
 /**
@@ -58,6 +64,7 @@ export const plantingRecordsRelations = relations(plantingRecords, ({ one, many 
   }),
   harvestRecords: many(harvestRecords),
   growthRecords: many(growthRecords),
+  matches: many(matches),
 }));
 
 /**
@@ -81,5 +88,42 @@ export const growthRecordsRelations = relations(growthRecords, ({ one }) => ({
   plantingRecord: one(plantingRecords, {
     fields: [growthRecords.plantingRecordId],
     references: [plantingRecords.id],
+  }),
+}));
+
+/**
+ * Demand relations.
+ */
+export const demandsRelations = relations(demands, ({ one, many }) => ({
+  buyer: one(users, {
+    fields: [demands.buyerId],
+    references: [users.id],
+  }),
+  cooperative: one(cooperatives, {
+    fields: [demands.cooperativeId],
+    references: [cooperatives.id],
+  }),
+  matches: many(matches),
+}));
+
+/**
+ * Match relations.
+ */
+export const matchesRelations = relations(matches, ({ one }) => ({
+  demand: one(demands, {
+    fields: [matches.demandId],
+    references: [demands.id],
+  }),
+  plantingRecord: one(plantingRecords, {
+    fields: [matches.plantingRecordId],
+    references: [plantingRecords.id],
+  }),
+  farmer: one(users, {
+    fields: [matches.farmerId],
+    references: [users.id],
+  }),
+  cooperative: one(cooperatives, {
+    fields: [matches.cooperativeId],
+    references: [cooperatives.id],
   }),
 }));

@@ -14,11 +14,17 @@ import {
   plantingRecords,
   harvestRecords,
   growthRecords,
+  demands,
+  matches,
   userRoleEnum,
   localeEnum,
   plantingStatusEnum,
   qualityGradeEnum,
   growthConditionEnum,
+  demandStatusEnum,
+  demandPriorityEnum,
+  matchStatusEnum,
+  taiwanRegionEnum,
 } from './index';
 
 describe('cooperatives table', () => {
@@ -160,5 +166,86 @@ describe('enums', () => {
     expect(growthConditionEnum.enumValues).toContain('normal');
     expect(growthConditionEnum.enumValues).toContain('poor');
     expect(growthConditionEnum.enumValues).toContain('critical');
+  });
+
+  test('demandStatusEnum has correct values', () => {
+    expect(demandStatusEnum.enumName).toBe('demand_status');
+    expect(demandStatusEnum.enumValues).toContain('pending');
+    expect(demandStatusEnum.enumValues).toContain('partially_matched');
+    expect(demandStatusEnum.enumValues).toContain('matched');
+    expect(demandStatusEnum.enumValues).toContain('fulfilled');
+    expect(demandStatusEnum.enumValues).toContain('expired');
+    expect(demandStatusEnum.enumValues).toContain('cancelled');
+  });
+
+  test('demandPriorityEnum has correct values', () => {
+    expect(demandPriorityEnum.enumName).toBe('demand_priority');
+    expect(demandPriorityEnum.enumValues).toContain('low');
+    expect(demandPriorityEnum.enumValues).toContain('medium');
+    expect(demandPriorityEnum.enumValues).toContain('high');
+    expect(demandPriorityEnum.enumValues).toContain('urgent');
+  });
+
+  test('matchStatusEnum has correct values', () => {
+    expect(matchStatusEnum.enumName).toBe('match_status');
+    expect(matchStatusEnum.enumValues).toContain('suggested');
+    expect(matchStatusEnum.enumValues).toContain('pending');
+    expect(matchStatusEnum.enumValues).toContain('accepted');
+    expect(matchStatusEnum.enumValues).toContain('rejected');
+    expect(matchStatusEnum.enumValues).toContain('fulfilled');
+    expect(matchStatusEnum.enumValues).toContain('cancelled');
+  });
+
+  test('taiwanRegionEnum has correct values', () => {
+    expect(taiwanRegionEnum.enumName).toBe('taiwan_region');
+    expect(taiwanRegionEnum.enumValues).toContain('north');
+    expect(taiwanRegionEnum.enumValues).toContain('central');
+    expect(taiwanRegionEnum.enumValues).toContain('south');
+    expect(taiwanRegionEnum.enumValues).toContain('east');
+  });
+});
+
+describe('demands table', () => {
+  test('has required columns', () => {
+    const columns = Object.keys(demands);
+    expect(columns).toContain('id');
+    expect(columns).toContain('buyerId');
+    expect(columns).toContain('cropId');
+    expect(columns).toContain('cropName');
+    expect(columns).toContain('quantity');
+    expect(columns).toContain('matchedQuantity');
+    expect(columns).toContain('deliveryDateStart');
+    expect(columns).toContain('deliveryDateEnd');
+    expect(columns).toContain('priority');
+    expect(columns).toContain('status');
+    expect(columns).toContain('createdAt');
+    expect(columns).toContain('updatedAt');
+  });
+
+  test('table name is correct', () => {
+    expect(getTableName(demands)).toBe('demands');
+  });
+});
+
+describe('matches table', () => {
+  test('has required columns', () => {
+    const columns = Object.keys(matches);
+    expect(columns).toContain('id');
+    expect(columns).toContain('demandId');
+    expect(columns).toContain('plantingRecordId');
+    expect(columns).toContain('farmerId');
+    expect(columns).toContain('cooperativeId');
+    expect(columns).toContain('cropId');
+    expect(columns).toContain('cropName');
+    expect(columns).toContain('quantity');
+    expect(columns).toContain('expectedHarvestDate');
+    expect(columns).toContain('score');
+    expect(columns).toContain('status');
+    expect(columns).toContain('createdAt');
+    expect(columns).toContain('updatedAt');
+  });
+
+  test('table name is correct', () => {
+    expect(getTableName(matches)).toBe('matches');
   });
 });

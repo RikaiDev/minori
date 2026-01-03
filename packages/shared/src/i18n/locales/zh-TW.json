@@ -153,5 +153,52 @@
       "export": "• 匯出報表：「匯出會員作物報表」",
       "closing": "有問題隨時問我！"
     }
+  },
+  "matching": {
+    "demand": {
+      "created": "✓ 需求已建立：{crop} {quantity} 公斤，交貨日期 {startDate} - {endDate}",
+      "updated": "✓ 需求已更新",
+      "cancelled": "✓ 需求已取消",
+      "notFound": "抱歉，找不到該需求。"
+    },
+    "suggestions": {
+      "title": "🤝 {crop} 配對建議",
+      "item": "• {farmer}：{quantity} 公斤（配對分數：{score}%）預計 {date}",
+      "canFullyMatch": "✓ 此需求可完全配對！",
+      "partialMatch": "⚠️ 目前僅有 {available} 公斤（需求 {needed} 公斤）。",
+      "noMatches": "目前沒有符合的供給來源。",
+      "empty": "目前沒有可配對的待處理需求。"
+    },
+    "match": {
+      "created": "✓ 已建立配對：{farmer} 提供 {crop} {quantity} 公斤",
+      "accepted": "✓ 農友 {farmer} 已接受配對，{crop} {quantity} 公斤",
+      "rejected": "農友 {farmer} 婉拒了此次配對",
+      "fulfilled": "✓ 配對完成！{crop} {quantity} 公斤已交貨",
+      "notifyFarmer": "📩 已通知農友 {farmer} 配對請求",
+      "notifyBuyer": "📩 已通知買家接受結果"
+    },
+    "summary": {
+      "title": "📊 配對統計（{period}）",
+      "totalDemands": "總需求：{count} 筆",
+      "matchedDemands": "已配對：{count} 筆",
+      "fulfilledDemands": "已完成：{count} 筆",
+      "successRate": "成功率：{rate}%",
+      "topCrops": "熱門配對作物：",
+      "topCropItem": "• {crop}：{count} 筆配對（{quantity} 公斤）"
+    },
+    "priority": {
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "urgent": "緊急"
+    },
+    "status": {
+      "pending": "待處理",
+      "partially_matched": "部分配對",
+      "matched": "已配對",
+      "fulfilled": "已完成",
+      "expired": "已過期",
+      "cancelled": "已取消"
+    }
   }
 }

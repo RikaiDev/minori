@@ -153,5 +153,52 @@
       "export": "• Export reports: \"Export member crop report\"",
       "closing": "Feel free to ask anytime!"
     }
+  },
+  "matching": {
+    "demand": {
+      "created": "✓ Demand request created: {quantity} kg of {crop}, delivery {startDate} - {endDate}",
+      "updated": "✓ Demand updated",
+      "cancelled": "✓ Demand cancelled",
+      "notFound": "Sorry, the demand request was not found."
+    },
+    "suggestions": {
+      "title": "🤝 Match Suggestions for {crop}",
+      "item": "• {farmer}: {quantity} kg (Score: {score}%) expected {date}",
+      "canFullyMatch": "✓ This demand can be fully matched!",
+      "partialMatch": "⚠️ Only {available} of {needed} kg can be matched.",
+      "noMatches": "No matching supply found for this demand.",
+      "empty": "No pending demands with available matches."
+    },
+    "match": {
+      "created": "✓ Match created: {quantity} kg of {crop} from {farmer}",
+      "accepted": "✓ Farmer {farmer} accepted the match for {quantity} kg of {crop}",
+      "rejected": "Farmer {farmer} declined the match",
+      "fulfilled": "✓ Match fulfilled! {quantity} kg of {crop} delivered",
+      "notifyFarmer": "📩 {farmer} has been notified about the match request",
+      "notifyBuyer": "📩 Buyer has been notified about the acceptance"
+    },
+    "summary": {
+      "title": "📊 Matching Summary ({period})",
+      "totalDemands": "Total demands: {count}",
+      "matchedDemands": "Matched: {count}",
+      "fulfilledDemands": "Fulfilled: {count}",
+      "successRate": "Success rate: {rate}%",
+      "topCrops": "Top matched crops:",
+      "topCropItem": "• {crop}: {count} matches ({quantity} kg)"
+    },
+    "priority": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "urgent": "Urgent"
+    },
+    "status": {
+      "pending": "Pending",
+      "partially_matched": "Partially Matched",
+      "matched": "Matched",
+      "fulfilled": "Fulfilled",
+      "expired": "Expired",
+      "cancelled": "Cancelled"
+    }
   }
 }

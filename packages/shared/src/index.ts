@@ -243,6 +243,209 @@ export type ExportFormat = 'xlsx' | 'csv' | 'json';
 export type ReportType = 'member_crops' | 'supply' | 'harvest_history';
 
 // ============================================================
+// Supply-Demand Matching Types
+// ============================================================
+
+/**
+ * Status of a demand request.
+ */
+export type DemandStatus =
+  | 'pending'
+  | 'partially_matched'
+  | 'matched'
+  | 'fulfilled'
+  | 'expired'
+  | 'cancelled';
+
+/**
+ * Status of a match between supply and demand.
+ */
+export type MatchStatus =
+  | 'suggested'
+  | 'pending'
+  | 'accepted'
+  | 'rejected'
+  | 'fulfilled'
+  | 'cancelled';
+
+/**
+ * Priority level for demand requests.
+ */
+export type DemandPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+/**
+ * Buyer demand request for agricultural products.
+ */
+export interface DemandRequest {
+  /** Unique identifier */
+  id: string;
+  /** Buyer/customer user ID */
+  buyerId: string;
+  /** Buyer name (denormalized for display) */
+  buyerName?: string;
+  /** Cooperative ID (if buyer is within cooperative network) */
+  cooperativeId?: string;
+  /** Requested crop ID */
+  cropId: string;
+  /** Crop name (denormalized for display) */
+  cropName: string;
+  /** Quantity needed in kg */
+  quantity: number;
+  /** Quantity already matched in kg */
+  matchedQuantity: number;
+  /** Minimum acceptable quality grade */
+  minQualityGrade?: 'A' | 'B' | 'C' | 'D';
+  /** Desired delivery date (earliest) */
+  deliveryDateStart: Date;
+  /** Desired delivery date (latest) */
+  deliveryDateEnd: Date;
+  /** Maximum price willing to pay (per kg) */
+  maxPricePerKg?: number;
+  /** Preferred region for sourcing */
+  preferredRegion?: TaiwanRegion;
+  /** Priority level */
+  priority: DemandPriority;
+  /** Current status */
+  status: DemandStatus;
+  /** Additional notes */
+  notes?: string;
+  /** Created timestamp */
+  createdAt: Date;
+  /** Updated timestamp */
+  updatedAt: Date;
+  /** Expiration date for this demand */
+  expiresAt?: Date;
+}
+
+/**
+ * Score breakdown for a match.
+ */
+export interface MatchScore {
+  /** Overall match score (0-100) */
+  overall: number;
+  /** Crop type compatibility (0-100) */
+  cropMatch: number;
+  /** Quantity compatibility (0-100) */
+  quantityMatch: number;
+  /** Delivery date compatibility (0-100) */
+  dateMatch: number;
+  /** Price compatibility (0-100, if applicable) */
+  priceMatch?: number;
+  /** Quality grade compatibility (0-100, if applicable) */
+  qualityMatch?: number;
+  /** Region preference match (0-100, if applicable) */
+  regionMatch?: number;
+}
+
+/**
+ * A match between supply and demand.
+ */
+export interface SupplyDemandMatch {
+  /** Unique identifier */
+  id: string;
+  /** Demand request ID */
+  demandId: string;
+  /** Supply source - planting record ID */
+  plantingRecordId: string;
+  /** Farmer user ID */
+  farmerId: string;
+  /** Farmer name (denormalized) */
+  farmerName?: string;
+  /** Cooperative ID */
+  cooperativeId: string;
+  /** Crop ID */
+  cropId: string;
+  /** Crop name (denormalized) */
+  cropName: string;
+  /** Matched quantity in kg */
+  quantity: number;
+  /** Expected harvest date */
+  expectedHarvestDate: Date;
+  /** Proposed price per kg */
+  proposedPricePerKg?: number;
+  /** Expected quality grade */
+  expectedQualityGrade?: 'A' | 'B' | 'C' | 'D';
+  /** Match score breakdown */
+  score: MatchScore;
+  /** Current match status */
+  status: MatchStatus;
+  /** Farmer's response to match */
+  farmerResponse?: {
+    accepted: boolean;
+    respondedAt: Date;
+    notes?: string;
+  };
+  /** Buyer's confirmation */
+  buyerConfirmation?: {
+    confirmed: boolean;
+    confirmedAt: Date;
+    notes?: string;
+  };
+  /** Created timestamp */
+  createdAt: Date;
+  /** Updated timestamp */
+  updatedAt: Date;
+}
+
+/**
+ * Match suggestion for display to cooperatives.
+ */
+export interface MatchSuggestion {
+  /** The demand being matched */
+  demand: DemandRequest;
+  /** Potential supply matches with scores */
+  matches: Array<{
+    plantingRecordId: string;
+    farmerId: string;
+    farmerName: string;
+    availableQuantity: number;
+    expectedHarvestDate: Date;
+    expectedQualityGrade?: 'A' | 'B' | 'C' | 'D';
+    score: MatchScore;
+    region?: TaiwanRegion;
+  }>;
+  /** Total available quantity across all matches */
+  totalAvailableQuantity: number;
+  /** Whether demand can be fully satisfied */
+  canFullyMatch: boolean;
+}
+
+/**
+ * Summary of matching statistics for a cooperative.
+ */
+export interface MatchingSummary {
+  /** Cooperative ID */
+  cooperativeId: string;
+  /** Period start */
+  periodStart: Date;
+  /** Period end */
+  periodEnd: Date;
+  /** Total demand requests in period */
+  totalDemands: number;
+  /** Pending demands */
+  pendingDemands: number;
+  /** Matched demands */
+  matchedDemands: number;
+  /** Fulfilled demands */
+  fulfilledDemands: number;
+  /** Total matches created */
+  totalMatches: number;
+  /** Accepted matches */
+  acceptedMatches: number;
+  /** Match success rate (accepted / total) */
+  successRate: number;
+  /** Total quantity matched in kg */
+  totalQuantityMatched: number;
+  /** Top matched crops */
+  topCrops: Array<{
+    cropId: string;
+    cropName: string;
+    matchCount: number;
+    totalQuantity: number;
+  }>;
+}
+
+// ============================================================
 // Utility Functions
 // ============================================================
 
