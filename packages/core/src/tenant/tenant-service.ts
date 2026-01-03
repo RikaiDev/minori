@@ -5,6 +5,15 @@
  * member invitations, and data sharing configuration.
  */
 
+import { eq, and, gt } from 'drizzle-orm';
+import {
+  getDatabase,
+  cooperatives,
+  users,
+  memberInvitations,
+  dataSharingConfigs,
+  type Database,
+} from '@minori/database';
 import type {
   AuthContext,
   CooperativeOnboardingRequest,
@@ -29,48 +38,15 @@ function generateCode(length: number): string {
 }
 
 /**
- * Mock storage for development.
- * TODO: Replace with database operations.
- */
-const MOCK_COOPERATIVES: Map<
-  string,
-  {
-    id: string;
-    name: string;
-    code: string;
-    region: TaiwanRegion;
-    email?: string;
-    phone?: string;
-    address?: string;
-    createdAt: Date;
-  }
-> = new Map();
-
-const MOCK_USERS: Map<
-  string,
-  {
-    id: string;
-    lineUserId: string;
-    cooperativeId: string;
-    role: UserRole;
-    name?: string;
-    createdAt: Date;
-  }
-> = new Map();
-
-const MOCK_INVITATIONS: Map<string, MemberInvitation> = new Map();
-
-const MOCK_SHARING_CONFIGS: Map<string, DataSharingConfig> = new Map();
-
-let idCounter = 1;
-function generateId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${idCounter++}`;
-}
-
-/**
  * Service for managing tenant operations.
  */
 export class TenantService {
+  private db: Database;
+
+  constructor(db?: Database) {
+    this.db = db ?? getDatabase();
+  }
+
   // ============================================
   // Cooperative Onboarding
   // ============================================
@@ -85,70 +61,85 @@ export class TenantService {
   async onboardCooperative(
     request: CooperativeOnboardingRequest
   ): Promise<CooperativeOnboardingResult> {
-    // Validate unique code
-    for (const coop of MOCK_COOPERATIVES.values()) {
-      if (coop.code === request.code) {
-        return {
-          cooperativeId: '',
-          adminUserId: '',
-          joinCode: '',
-          success: false,
-          error: 'Cooperative code already exists',
-        };
-      }
+    // Check if code already exists
+    const existingCoop = await this.db
+      .select({ id: cooperatives.id })
+      .from(cooperatives)
+      .where(eq(cooperatives.code, request.code))
+      .limit(1);
+
+    if (existingCoop.length > 0) {
+      return {
+        cooperativeId: '',
+        adminUserId: '',
+        joinCode: '',
+        success: false,
+        error: 'Cooperative code already exists',
+      };
     }
 
-    // Validate LINE user not already registered
-    for (const user of MOCK_USERS.values()) {
-      if (user.lineUserId === request.adminLineUserId) {
-        return {
-          cooperativeId: '',
-          adminUserId: '',
-          joinCode: '',
-          success: false,
-          error: 'LINE user already registered',
-        };
-      }
+    // Check if LINE user is already registered
+    const existingUser = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.lineUserId, request.adminLineUserId))
+      .limit(1);
+
+    if (existingUser.length > 0) {
+      return {
+        cooperativeId: '',
+        adminUserId: '',
+        joinCode: '',
+        success: false,
+        error: 'LINE user already registered',
+      };
     }
 
     // Create cooperative
-    const cooperativeId = generateId('coop');
-    const now = new Date();
+    const newCooperatives = await this.db
+      .insert(cooperatives)
+      .values({
+        name: request.name,
+        code: request.code,
+        region: request.region,
+        email: request.email,
+        phone: request.phone,
+        address: request.address,
+      })
+      .returning({ id: cooperatives.id });
 
-    MOCK_COOPERATIVES.set(cooperativeId, {
-      id: cooperativeId,
-      name: request.name,
-      code: request.code,
-      region: request.region,
-      email: request.email,
-      phone: request.phone,
-      address: request.address,
-      createdAt: now,
-    });
+    const newCooperative = newCooperatives[0];
+    if (!newCooperative) {
+      throw new Error('Failed to create cooperative');
+    }
 
     // Create admin user
-    const adminUserId = generateId('user');
-    MOCK_USERS.set(adminUserId, {
-      id: adminUserId,
-      lineUserId: request.adminLineUserId,
-      cooperativeId,
-      role: 'cooperative_admin',
-      name: request.adminName,
-      createdAt: now,
-    });
+    const newUsers = await this.db
+      .insert(users)
+      .values({
+        lineUserId: request.adminLineUserId,
+        cooperativeId: newCooperative.id,
+        role: 'cooperative_admin',
+        name: request.adminName,
+      })
+      .returning({ id: users.id });
+
+    const newUser = newUsers[0];
+    if (!newUser) {
+      throw new Error('Failed to create admin user');
+    }
 
     // Create default data sharing config (all disabled)
-    MOCK_SHARING_CONFIGS.set(cooperativeId, {
-      cooperativeId,
+    await this.db.insert(dataSharingConfigs).values({
+      cooperativeId: newCooperative.id,
       shareSupplyData: false,
       acceptExternalDemands: false,
-      sharedWithCooperatives: [],
-      updatedAt: now,
+      shareFarmerProfiles: false,
     });
 
     return {
-      cooperativeId,
-      adminUserId,
+      cooperativeId: newCooperative.id,
+      adminUserId: newUser.id,
       joinCode: request.code,
       success: true,
     };
@@ -163,13 +154,23 @@ export class TenantService {
     code: string;
     region: TaiwanRegion;
   } | null> {
-    const coop = MOCK_COOPERATIVES.get(cooperativeId);
+    const [coop] = await this.db
+      .select({
+        id: cooperatives.id,
+        name: cooperatives.name,
+        code: cooperatives.code,
+        region: cooperatives.region,
+      })
+      .from(cooperatives)
+      .where(eq(cooperatives.id, cooperativeId))
+      .limit(1);
+
     if (!coop) return null;
     return {
       id: coop.id,
       name: coop.name,
       code: coop.code,
-      region: coop.region,
+      region: coop.region as TaiwanRegion,
     };
   }
 
@@ -181,16 +182,22 @@ export class TenantService {
     name: string;
     region: TaiwanRegion;
   } | null> {
-    for (const coop of MOCK_COOPERATIVES.values()) {
-      if (coop.code === code) {
-        return {
-          id: coop.id,
-          name: coop.name,
-          region: coop.region,
-        };
-      }
-    }
-    return null;
+    const [coop] = await this.db
+      .select({
+        id: cooperatives.id,
+        name: cooperatives.name,
+        region: cooperatives.region,
+      })
+      .from(cooperatives)
+      .where(eq(cooperatives.code, code))
+      .limit(1);
+
+    if (!coop) return null;
+    return {
+      id: coop.id,
+      name: coop.name,
+      region: coop.region as TaiwanRegion,
+    };
   }
 
   // ============================================
@@ -224,22 +231,36 @@ export class TenantService {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + expiresInDays * 24 * 60 * 60 * 1000);
     const code = generateCode(6);
-    const id = generateId('inv');
 
-    const invitation: MemberInvitation = {
-      id,
-      cooperativeId: ctx.cooperativeId,
-      invitedBy: ctx.userId,
-      role,
-      code,
-      expiresAt,
-      used: false,
-      createdAt: now,
+    const invitations = await this.db
+      .insert(memberInvitations)
+      .values({
+        cooperativeId: ctx.cooperativeId,
+        invitedBy: ctx.userId,
+        role: role as 'farmer' | 'cooperative_admin' | 'cooperative_staff' | 'customer',
+        code,
+        inviteeName,
+        inviteeEmail,
+        status: 'pending',
+        expiresAt,
+      })
+      .returning();
+
+    const invitation = invitations[0];
+    if (!invitation) {
+      throw new Error('Failed to create invitation');
+    }
+
+    return {
+      id: invitation.id,
+      cooperativeId: invitation.cooperativeId,
+      invitedBy: invitation.invitedBy,
+      role: invitation.role as UserRole,
+      code: invitation.code,
+      expiresAt: invitation.expiresAt,
+      used: invitation.status !== 'pending',
+      createdAt: invitation.createdAt,
     };
-
-    MOCK_INVITATIONS.set(id, invitation);
-
-    return invitation;
   }
 
   /**
@@ -249,15 +270,27 @@ export class TenantService {
     requirePermission(ctx, 'member:read', 'cooperative');
 
     const now = new Date();
-    const invitations: MemberInvitation[] = [];
+    const invitations = await this.db
+      .select()
+      .from(memberInvitations)
+      .where(
+        and(
+          eq(memberInvitations.cooperativeId, ctx.cooperativeId),
+          eq(memberInvitations.status, 'pending'),
+          gt(memberInvitations.expiresAt, now)
+        )
+      );
 
-    for (const inv of MOCK_INVITATIONS.values()) {
-      if (inv.cooperativeId === ctx.cooperativeId && !inv.used && inv.expiresAt > now) {
-        invitations.push(inv);
-      }
-    }
-
-    return invitations;
+    return invitations.map((inv) => ({
+      id: inv.id,
+      cooperativeId: inv.cooperativeId,
+      invitedBy: inv.invitedBy,
+      role: inv.role as UserRole,
+      code: inv.code,
+      expiresAt: inv.expiresAt,
+      used: inv.status !== 'pending',
+      createdAt: inv.createdAt,
+    }));
   }
 
   /**
@@ -281,19 +314,17 @@ export class TenantService {
     error?: string;
   }> {
     // Find invitation by code
-    let invitation: MemberInvitation | undefined;
-    for (const inv of MOCK_INVITATIONS.values()) {
-      if (inv.code === invitationCode) {
-        invitation = inv;
-        break;
-      }
-    }
+    const [invitation] = await this.db
+      .select()
+      .from(memberInvitations)
+      .where(eq(memberInvitations.code, invitationCode))
+      .limit(1);
 
     if (!invitation) {
       return { success: false, error: 'Invalid invitation code' };
     }
 
-    if (invitation.used) {
+    if (invitation.status !== 'pending') {
       return { success: false, error: 'Invitation has already been used' };
     }
 
@@ -302,33 +333,47 @@ export class TenantService {
     }
 
     // Check if LINE user already exists
-    for (const user of MOCK_USERS.values()) {
-      if (user.lineUserId === lineUserId) {
-        return { success: false, error: 'User already registered' };
-      }
+    const [existingUser] = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.lineUserId, lineUserId))
+      .limit(1);
+
+    if (existingUser) {
+      return { success: false, error: 'User already registered' };
     }
 
     // Create user
-    const userId = generateId('user');
-    const now = new Date();
+    const newUsers = await this.db
+      .insert(users)
+      .values({
+        lineUserId,
+        cooperativeId: invitation.cooperativeId,
+        role: invitation.role,
+        name,
+      })
+      .returning({ id: users.id });
 
-    MOCK_USERS.set(userId, {
-      id: userId,
-      lineUserId,
-      cooperativeId: invitation.cooperativeId,
-      role: invitation.role,
-      name,
-      createdAt: now,
-    });
+    const newUser = newUsers[0];
+    if (!newUser) {
+      throw new Error('Failed to create user');
+    }
 
-    // Mark invitation as used
-    invitation.used = true;
+    // Mark invitation as accepted
+    await this.db
+      .update(memberInvitations)
+      .set({
+        status: 'accepted',
+        acceptedBy: newUser.id,
+        acceptedAt: new Date(),
+      })
+      .where(eq(memberInvitations.id, invitation.id));
 
     return {
       success: true,
-      userId,
+      userId: newUser.id,
       cooperativeId: invitation.cooperativeId,
-      role: invitation.role,
+      role: invitation.role as UserRole,
     };
   }
 
@@ -358,28 +403,35 @@ export class TenantService {
     }
 
     // Check if LINE user already exists
-    for (const user of MOCK_USERS.values()) {
-      if (user.lineUserId === lineUserId) {
-        return { success: false, error: 'User already registered' };
-      }
+    const [existingUser] = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.lineUserId, lineUserId))
+      .limit(1);
+
+    if (existingUser) {
+      return { success: false, error: 'User already registered' };
     }
 
     // Create user as farmer
-    const userId = generateId('user');
-    const now = new Date();
+    const newUsers = await this.db
+      .insert(users)
+      .values({
+        lineUserId,
+        cooperativeId: cooperative.id,
+        role: 'farmer',
+        name,
+      })
+      .returning({ id: users.id });
 
-    MOCK_USERS.set(userId, {
-      id: userId,
-      lineUserId,
-      cooperativeId: cooperative.id,
-      role: 'farmer',
-      name,
-      createdAt: now,
-    });
+    const newUser = newUsers[0];
+    if (!newUser) {
+      throw new Error('Failed to create user');
+    }
 
     return {
       success: true,
-      userId,
+      userId: newUser.id,
       cooperativeId: cooperative.id,
     };
   }
@@ -397,25 +449,22 @@ export class TenantService {
   > {
     requirePermission(ctx, 'member:read', 'cooperative');
 
-    const members: Array<{
-      id: string;
-      name?: string;
-      role: UserRole;
-      createdAt: Date;
-    }> = [];
+    const members = await this.db
+      .select({
+        id: users.id,
+        name: users.name,
+        role: users.role,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(eq(users.cooperativeId, ctx.cooperativeId));
 
-    for (const user of MOCK_USERS.values()) {
-      if (user.cooperativeId === ctx.cooperativeId) {
-        members.push({
-          id: user.id,
-          name: user.name,
-          role: user.role,
-          createdAt: user.createdAt,
-        });
-      }
-    }
-
-    return members;
+    return members.map((member) => ({
+      id: member.id,
+      name: member.name ?? undefined,
+      role: member.role as UserRole,
+      createdAt: member.createdAt,
+    }));
   }
 
   /**
@@ -434,12 +483,24 @@ export class TenantService {
       throw new AuthorizationError('Cannot demote yourself');
     }
 
-    const user = MOCK_USERS.get(memberId);
+    // Check if user exists and belongs to the cooperative
+    const [user] = await this.db
+      .select({ id: users.id, cooperativeId: users.cooperativeId })
+      .from(users)
+      .where(eq(users.id, memberId))
+      .limit(1);
+
     if (!user || user.cooperativeId !== ctx.cooperativeId) {
       return false;
     }
 
-    user.role = newRole;
+    await this.db
+      .update(users)
+      .set({
+        role: newRole as 'farmer' | 'cooperative_admin' | 'cooperative_staff' | 'customer',
+      })
+      .where(eq(users.id, memberId));
+
     return true;
   }
 
@@ -453,7 +514,21 @@ export class TenantService {
   async getDataSharingConfig(ctx: AuthContext): Promise<DataSharingConfig | null> {
     requirePermission(ctx, 'cooperative:read', 'cooperative');
 
-    return MOCK_SHARING_CONFIGS.get(ctx.cooperativeId) ?? null;
+    const [config] = await this.db
+      .select()
+      .from(dataSharingConfigs)
+      .where(eq(dataSharingConfigs.cooperativeId, ctx.cooperativeId))
+      .limit(1);
+
+    if (!config) return null;
+
+    return {
+      cooperativeId: config.cooperativeId,
+      shareSupplyData: config.shareSupplyData,
+      acceptExternalDemands: config.acceptExternalDemands,
+      sharedWithCooperatives: [], // Populated from cooperativeSharingRelations in production
+      updatedAt: config.updatedAt,
+    };
   }
 
   /**
@@ -465,26 +540,61 @@ export class TenantService {
   ): Promise<DataSharingConfig> {
     requirePermission(ctx, 'cooperative:manage_sharing', 'cooperative');
 
-    let existing = MOCK_SHARING_CONFIGS.get(ctx.cooperativeId);
+    // Check if config exists
+    const [existing] = await this.db
+      .select()
+      .from(dataSharingConfigs)
+      .where(eq(dataSharingConfigs.cooperativeId, ctx.cooperativeId))
+      .limit(1);
+
     if (!existing) {
-      existing = {
-        cooperativeId: ctx.cooperativeId,
-        shareSupplyData: false,
-        acceptExternalDemands: false,
+      // Create new config
+      const newConfigs = await this.db
+        .insert(dataSharingConfigs)
+        .values({
+          cooperativeId: ctx.cooperativeId,
+          shareSupplyData: config.shareSupplyData ?? false,
+          acceptExternalDemands: config.acceptExternalDemands ?? false,
+          shareFarmerProfiles: false,
+        })
+        .returning();
+
+      const newConfig = newConfigs[0];
+      if (!newConfig) {
+        throw new Error('Failed to create data sharing config');
+      }
+
+      return {
+        cooperativeId: newConfig.cooperativeId,
+        shareSupplyData: newConfig.shareSupplyData,
+        acceptExternalDemands: newConfig.acceptExternalDemands,
         sharedWithCooperatives: [],
-        updatedAt: new Date(),
+        updatedAt: newConfig.updatedAt,
       };
     }
 
-    const updated: DataSharingConfig = {
-      ...existing,
-      ...config,
-      cooperativeId: ctx.cooperativeId,
-      updatedAt: new Date(),
-    };
+    // Update existing config
+    const updatedConfigs = await this.db
+      .update(dataSharingConfigs)
+      .set({
+        shareSupplyData: config.shareSupplyData ?? existing.shareSupplyData,
+        acceptExternalDemands: config.acceptExternalDemands ?? existing.acceptExternalDemands,
+      })
+      .where(eq(dataSharingConfigs.cooperativeId, ctx.cooperativeId))
+      .returning();
 
-    MOCK_SHARING_CONFIGS.set(ctx.cooperativeId, updated);
-    return updated;
+    const updated = updatedConfigs[0];
+    if (!updated) {
+      throw new Error('Failed to update data sharing config');
+    }
+
+    return {
+      cooperativeId: updated.cooperativeId,
+      shareSupplyData: updated.shareSupplyData,
+      acceptExternalDemands: updated.acceptExternalDemands,
+      sharedWithCooperatives: config.sharedWithCooperatives ?? [],
+      updatedAt: updated.updatedAt,
+    };
   }
 
   /**
@@ -501,7 +611,7 @@ export class TenantService {
     requirePermission(ctx, 'cooperative:read', 'cooperative');
 
     // In production, this would query cooperative_sharing_relations
-    // For now, return empty array
+    // For now, return empty array as cross-cooperative sharing is a future feature
     return [];
   }
 
@@ -520,23 +630,33 @@ export class TenantService {
     name?: string;
     locale?: 'en' | 'zh-TW';
   } | null> {
-    for (const user of MOCK_USERS.values()) {
-      if (user.lineUserId === lineUserId) {
-        return {
-          id: user.id,
-          cooperativeId: user.cooperativeId,
-          role: user.role,
-          name: user.name,
-        };
-      }
-    }
-    return null;
+    const [user] = await this.db
+      .select({
+        id: users.id,
+        cooperativeId: users.cooperativeId,
+        role: users.role,
+        name: users.name,
+        locale: users.locale,
+      })
+      .from(users)
+      .where(eq(users.lineUserId, lineUserId))
+      .limit(1);
+
+    if (!user) return null;
+
+    return {
+      id: user.id,
+      cooperativeId: user.cooperativeId,
+      role: user.role as UserRole,
+      name: user.name ?? undefined,
+      locale: user.locale as 'en' | 'zh-TW' | undefined,
+    };
   }
 }
 
 /**
  * Factory function to create a tenant service.
  */
-export function createTenantService(): TenantService {
-  return new TenantService();
+export function createTenantService(db?: Database): TenantService {
+  return new TenantService(db);
 }

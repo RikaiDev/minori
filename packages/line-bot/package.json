@@ -19,6 +19,8 @@
     "@minori/shared": "workspace:*",
     "@minori/core": "workspace:*",
     "@minori/ai-engine": "workspace:*",
-    "@line/bot-sdk": "^9.6.0"
+    "@minori/database": "workspace:*",
+    "@line/bot-sdk": "^9.6.0",
+    "drizzle-orm": "^0.38.3"
   }
 }

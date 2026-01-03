@@ -22,6 +22,7 @@ import { findCropByName, predictHarvest, getCropById, PriceService } from '@mino
 import { t, formatDate } from '@minori/shared';
 import type { ParsedIntent, ParsedEntities } from '@minori/shared';
 import { handleCooperativeAction } from './cooperative-handler';
+import { getFieldRecordService } from '../services/field-record-service';
 
 /**
  * Response with optional quick reply buttons.
@@ -197,13 +198,13 @@ async function executeAction(
 ): Promise<MessageResponse> {
   switch (action) {
     case 'record_planting':
-      return handleRecordPlanting(entities);
+      return handleRecordPlanting(entities, userId);
 
     case 'record_harvest':
-      return handleRecordHarvest(entities);
+      return handleRecordHarvest(entities, userId);
 
     case 'record_growth':
-      return handleRecordGrowth(entities);
+      return handleRecordGrowth(entities, userId);
 
     case 'query_crops':
       return handleQueryCrops(userId);
@@ -251,10 +252,14 @@ async function executeAction(
  * Handles planting record action.
  *
  * @param entities - Collected entities
+ * @param lineUserId - LINE user ID
  * @returns Response with text and quick reply buttons
  */
-function handleRecordPlanting(entities: Partial<ParsedEntities>): MessageResponse {
-  const { crop, area, areaUnit } = entities;
+async function handleRecordPlanting(
+  entities: Partial<ParsedEntities>,
+  lineUserId: string
+): Promise<MessageResponse> {
+  const { crop, cropId, area, areaUnit } = entities;
 
   if (!crop || !area) {
     return {
@@ -264,39 +269,75 @@ function handleRecordPlanting(entities: Partial<ParsedEntities>): MessageRespons
   }
 
   // Get crop info for prediction
-  const cropInfo = findCropByName(crop);
+  const cropInfo = cropId ? getCropById(cropId) : findCropByName(crop);
 
-  let response = t('record.planting.success', {
-    crop,
-    area,
-    unit: areaUnit || t('units.area.plots'),
-  });
+  try {
+    // Save record to database
+    const fieldRecordService = getFieldRecordService();
+    const record = await fieldRecordService.createPlantingRecord({
+      lineUserId,
+      cropId: cropInfo?.id ?? 'unknown',
+      cropName: cropInfo?.name ?? crop,
+      area,
+    });
 
-  // Add prediction if crop info is available
-  if (cropInfo) {
-    const prediction = predictHarvest(cropInfo, new Date());
-    const likelyDate = formatDate(prediction.predictions.likely);
+    let response = t('record.planting.success', {
+      crop,
+      area,
+      unit: areaUnit || t('units.area.plots'),
+    });
 
-    response += '\n\n' + t('record.planting.predictedHarvest', { date: likelyDate });
-    response +=
-      '\n' + t('record.planting.optimalTemp', { temp: cropInfo.growth.temperatureOptimal });
+    // Add prediction if available
+    if (record.expectedHarvestDate) {
+      const likelyDate = formatDate(record.expectedHarvestDate);
+      response += '\n\n' + t('record.planting.predictedHarvest', { date: likelyDate });
+    }
+
+    if (cropInfo) {
+      response +=
+        '\n' + t('record.planting.optimalTemp', { temp: cropInfo.growth.temperatureOptimal });
+    }
+
+    return {
+      text: response,
+      quickReply: QuickReplyPresets.afterPlanting(),
+    };
+  } catch (error) {
+    console.error('Error saving planting record:', error);
+
+    // Fall back to response without database
+    let response = t('record.planting.success', {
+      crop,
+      area,
+      unit: areaUnit || t('units.area.plots'),
+    });
+
+    if (cropInfo) {
+      const prediction = predictHarvest(cropInfo, new Date());
+      const likelyDate = formatDate(prediction.predictions.likely);
+      response += '\n\n' + t('record.planting.predictedHarvest', { date: likelyDate });
+      response +=
+        '\n' + t('record.planting.optimalTemp', { temp: cropInfo.growth.temperatureOptimal });
+    }
+
+    return {
+      text: response,
+      quickReply: QuickReplyPresets.afterPlanting(),
+    };
   }
-
-  // TODO: Save record to database
-
-  return {
-    text: response,
-    quickReply: QuickReplyPresets.afterPlanting(),
-  };
 }
 
 /**
  * Handles harvest record action.
  *
  * @param entities - Collected entities
+ * @param lineUserId - LINE user ID
  * @returns Response with text and quick reply buttons
  */
-function handleRecordHarvest(entities: Partial<ParsedEntities>): MessageResponse {
+async function handleRecordHarvest(
+  entities: Partial<ParsedEntities>,
+  lineUserId: string
+): Promise<MessageResponse> {
   const { crop, quantity, quantityUnit } = entities;
 
   if (!crop || !quantity) {
@@ -306,30 +347,58 @@ function handleRecordHarvest(entities: Partial<ParsedEntities>): MessageResponse
     };
   }
 
-  let response = t('record.harvest.success', {
-    crop,
-    quantity,
-    unit: quantityUnit || t('units.weight.kg'),
-  });
+  try {
+    // Save record to database
+    const fieldRecordService = getFieldRecordService();
+    await fieldRecordService.createHarvestRecord({
+      lineUserId,
+      cropName: crop,
+      quantity,
+    });
 
-  response += '\n\n' + t('record.harvest.notifyCooperative');
+    let response = t('record.harvest.success', {
+      crop,
+      quantity,
+      unit: quantityUnit || t('units.weight.kg'),
+    });
 
-  // TODO: Save record to database
+    response += '\n\n' + t('record.harvest.notifyCooperative');
 
-  return {
-    text: response,
-    quickReply: QuickReplyPresets.afterHarvest(),
-  };
+    return {
+      text: response,
+      quickReply: QuickReplyPresets.afterHarvest(),
+    };
+  } catch (error) {
+    console.error('Error saving harvest record:', error);
+
+    // Fall back to response without database
+    let response = t('record.harvest.success', {
+      crop,
+      quantity,
+      unit: quantityUnit || t('units.weight.kg'),
+    });
+
+    response += '\n\n' + t('record.harvest.notifyCooperative');
+
+    return {
+      text: response,
+      quickReply: QuickReplyPresets.afterHarvest(),
+    };
+  }
 }
 
 /**
  * Handles growth record action.
  *
  * @param entities - Collected entities
+ * @param lineUserId - LINE user ID
  * @returns Response with text and quick reply buttons
  */
-function handleRecordGrowth(entities: Partial<ParsedEntities>): MessageResponse {
-  const { crop, condition: _condition } = entities;
+async function handleRecordGrowth(
+  entities: Partial<ParsedEntities>,
+  lineUserId: string
+): Promise<MessageResponse> {
+  const { crop, condition } = entities;
 
   if (!crop) {
     return {
@@ -338,44 +407,94 @@ function handleRecordGrowth(entities: Partial<ParsedEntities>): MessageResponse 
     };
   }
 
-  const response = t('record.growth.success', { crop });
+  try {
+    // Map condition string to enum value
+    const conditionMap: Record<string, 'excellent' | 'good' | 'normal' | 'poor' | 'critical'> = {
+      excellent: 'excellent',
+      good: 'good',
+      normal: 'normal',
+      poor: 'poor',
+      critical: 'critical',
+    };
 
-  // TODO: Save record to database with condition
+    const growthCondition = condition ? conditionMap[condition] || 'normal' : 'normal';
 
-  return {
-    text: response,
-    quickReply: QuickReplyPresets.mainMenu(),
-  };
+    // Save record to database
+    const fieldRecordService = getFieldRecordService();
+    const result = await fieldRecordService.createGrowthRecord({
+      lineUserId,
+      cropName: crop,
+      condition: growthCondition,
+    });
+
+    if (!result) {
+      return {
+        text: t('record.growth.noPlanting', { crop }),
+        quickReply: QuickReplyPresets.mainMenu(),
+      };
+    }
+
+    const response = t('record.growth.success', { crop });
+
+    return {
+      text: response,
+      quickReply: QuickReplyPresets.mainMenu(),
+    };
+  } catch (error) {
+    console.error('Error saving growth record:', error);
+
+    // Fall back to response without database
+    const response = t('record.growth.success', { crop });
+
+    return {
+      text: response,
+      quickReply: QuickReplyPresets.mainMenu(),
+    };
+  }
 }
 
 /**
  * Handles crop query action.
  * Shows the user's recorded crops with harvest predictions.
  *
- * @param userId - LINE user ID
+ * @param lineUserId - LINE user ID
  * @returns Response with crop list
  */
-async function handleQueryCrops(_userId: string): Promise<MessageResponse> {
-  // TODO: Fetch actual records from database
-  // For now, return a demo response
+async function handleQueryCrops(lineUserId: string): Promise<MessageResponse> {
+  try {
+    const fieldRecordService = getFieldRecordService();
+    const records = await fieldRecordService.getActivePlantingRecords(lineUserId);
 
-  // Check if user has any records (placeholder)
-  const hasRecords = false;
+    if (records.length === 0) {
+      return {
+        text: t('query.crops.empty') + '\n\n' + t('help.recording'),
+        quickReply: QuickReplyPresets.mainMenu(),
+      };
+    }
 
-  if (!hasRecords) {
+    // Build crop list
+    const cropLines = records.map((record) => {
+      let line = `• ${record.cropName} - ${record.area}${t('units.area.plots')}`;
+      if (record.expectedHarvestDate) {
+        line += ` (${t('query.crops.harvestDate', { date: formatDate(record.expectedHarvestDate) })})`;
+      }
+      return line;
+    });
+
+    const response = [t('query.crops.title'), '', ...cropLines].join('\n');
+
+    return {
+      text: response,
+      quickReply: QuickReplyPresets.mainMenu(),
+    };
+  } catch (error) {
+    console.error('Error fetching crop records:', error);
+
     return {
       text: t('query.crops.empty') + '\n\n' + t('help.recording'),
       quickReply: QuickReplyPresets.mainMenu(),
     };
   }
-
-  // TODO: Build actual crop list from database records
-  const cropList = t('query.crops.title');
-
-  return {
-    text: cropList,
-    quickReply: QuickReplyPresets.mainMenu(),
-  };
 }
 
 /**

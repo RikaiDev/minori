@@ -4,6 +4,14 @@
  * Service for managing and sending notifications to users.
  */
 
+import { eq, and, lte, desc, sql, or, isNull } from 'drizzle-orm';
+import {
+  getDatabase,
+  notifications,
+  notificationPreferences,
+  users,
+  type Database,
+} from '@minori/database';
 import type {
   Notification,
   NotificationType,
@@ -14,18 +22,6 @@ import type {
   NotificationDeliveryResult,
 } from '@minori/shared';
 import { getNotificationTemplate, validateTemplateData, getDefaultPriority } from './templates';
-
-/**
- * Mock storage for notifications.
- * TODO: Replace with database operations.
- */
-const MOCK_NOTIFICATIONS: Map<string, Notification> = new Map();
-const MOCK_PREFERENCES: Map<string, NotificationPreferences> = new Map();
-
-let notificationIdCounter = 1;
-function generateId(): string {
-  return `notif_${Date.now()}_${notificationIdCounter++}`;
-}
 
 /**
  * Configuration for the notification service.
@@ -57,9 +53,11 @@ const DEFAULT_CONFIG: Required<Omit<NotificationServiceConfig, 'sendLinePush'>> 
  */
 export class NotificationService {
   private config: NotificationServiceConfig;
+  private db: Database;
 
-  constructor(config?: NotificationServiceConfig) {
+  constructor(config?: NotificationServiceConfig, db?: Database) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.db = db ?? getDatabase();
   }
 
   // ============================================
@@ -82,8 +80,7 @@ export class NotificationService {
       );
     }
 
-    const notifications: Notification[] = [];
-    const now = new Date();
+    const createdNotifications: Notification[] = [];
     const priority = trigger.priority ?? template.defaultPriority;
 
     // Determine target users
@@ -95,28 +92,30 @@ export class NotificationService {
       if (!preferences.enabled) continue;
       if (!this.shouldSendNotification(trigger.type, preferences)) continue;
 
-      const notification: Notification = {
-        id: generateId(),
-        userId,
-        cooperativeId: trigger.cooperativeId,
-        type: trigger.type,
-        priority,
-        title: template.titleKey,
-        body: template.bodyKey,
-        data: trigger.data,
-        relatedEntityId: trigger.sourceId,
-        relatedEntityType: trigger.sourceType,
-        status: 'pending',
-        scheduledAt: trigger.scheduledAt,
-        createdAt: now,
-        updatedAt: now,
-      };
+      const insertedNotifications = await this.db
+        .insert(notifications)
+        .values({
+          userId,
+          cooperativeId: trigger.cooperativeId,
+          type: trigger.type as NotificationType,
+          priority: priority as NotificationPriority,
+          title: template.titleKey,
+          body: template.bodyKey,
+          data: trigger.data,
+          relatedEntityId: trigger.sourceId,
+          relatedEntityType: trigger.sourceType,
+          status: 'pending',
+          scheduledAt: trigger.scheduledAt,
+        })
+        .returning();
 
-      MOCK_NOTIFICATIONS.set(notification.id, notification);
-      notifications.push(notification);
+      const notification = insertedNotifications[0];
+      if (notification) {
+        createdNotifications.push(this.mapToNotification(notification));
+      }
     }
 
-    return notifications;
+    return createdNotifications;
   }
 
   /**
@@ -134,26 +133,29 @@ export class NotificationService {
     relatedEntityType?: string;
     scheduledAt?: Date;
   }): Promise<Notification> {
-    const now = new Date();
-    const notification: Notification = {
-      id: generateId(),
-      userId: params.userId,
-      cooperativeId: params.cooperativeId,
-      type: params.type,
-      priority: params.priority ?? getDefaultPriority(params.type),
-      title: params.title,
-      body: params.body,
-      data: params.data,
-      relatedEntityId: params.relatedEntityId,
-      relatedEntityType: params.relatedEntityType,
-      status: 'pending',
-      scheduledAt: params.scheduledAt,
-      createdAt: now,
-      updatedAt: now,
-    };
+    const insertedNotifications = await this.db
+      .insert(notifications)
+      .values({
+        userId: params.userId,
+        cooperativeId: params.cooperativeId,
+        type: params.type,
+        priority: params.priority ?? getDefaultPriority(params.type),
+        title: params.title,
+        body: params.body,
+        data: params.data,
+        relatedEntityId: params.relatedEntityId,
+        relatedEntityType: params.relatedEntityType,
+        status: 'pending',
+        scheduledAt: params.scheduledAt,
+      })
+      .returning();
 
-    MOCK_NOTIFICATIONS.set(notification.id, notification);
-    return notification;
+    const notification = insertedNotifications[0];
+    if (!notification) {
+      throw new Error('Failed to create notification');
+    }
+
+    return this.mapToNotification(notification);
   }
 
   // ============================================
@@ -168,22 +170,22 @@ export class NotificationService {
   async sendPendingNotifications(): Promise<NotificationDeliveryResult[]> {
     const now = new Date();
     const results: NotificationDeliveryResult[] = [];
-    const pendingNotifications: Notification[] = [];
 
     // Find pending notifications that are due
-    for (const notification of MOCK_NOTIFICATIONS.values()) {
-      if (notification.status !== 'pending') continue;
-
-      // Check if scheduled time has passed (or no schedule = immediate)
-      if (notification.scheduledAt && notification.scheduledAt > now) continue;
-
-      pendingNotifications.push(notification);
-      if (pendingNotifications.length >= (this.config.batchSize ?? 100)) break;
-    }
+    const pendingNotifications = await this.db
+      .select()
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.status, 'pending'),
+          or(isNull(notifications.scheduledAt), lte(notifications.scheduledAt, now))
+        )
+      )
+      .limit(this.config.batchSize ?? 100);
 
     // Send each notification
     for (const notification of pendingNotifications) {
-      const result = await this.deliverNotification(notification);
+      const result = await this.deliverNotification(this.mapToNotification(notification));
       results.push(result);
     }
 
@@ -195,45 +197,86 @@ export class NotificationService {
    */
   async deliverNotification(notification: Notification): Promise<NotificationDeliveryResult> {
     try {
+      // Increment delivery attempts
+      await this.db
+        .update(notifications)
+        .set({
+          deliveryAttempts: sql`${notifications.deliveryAttempts} + 1`,
+        })
+        .where(eq(notifications.id, notification.id));
+
       // Check if we have a LINE push function configured
       if (!this.config.sendLinePush) {
         // Simulate delivery for testing
-        notification.status = 'sent';
-        notification.sentAt = new Date();
-        notification.updatedAt = new Date();
+        await this.db
+          .update(notifications)
+          .set({
+            status: 'sent',
+            sentAt: new Date(),
+          })
+          .where(eq(notifications.id, notification.id));
 
         return {
           notificationId: notification.id,
           success: true,
-          deliveredAt: notification.sentAt,
+          deliveredAt: new Date(),
         };
       }
 
-      // Get user's LINE ID (would need database lookup in production)
-      // For now, we'll use a mock
-      const lineUserId = `LINE_${notification.userId}`;
+      // Get user's LINE ID
+      const [user] = await this.db
+        .select({ lineUserId: users.lineUserId })
+        .from(users)
+        .where(eq(users.id, notification.userId))
+        .limit(1);
+
+      if (!user) {
+        await this.db
+          .update(notifications)
+          .set({
+            status: 'failed',
+            errorMessage: 'User not found',
+          })
+          .where(eq(notifications.id, notification.id));
+
+        return {
+          notificationId: notification.id,
+          success: false,
+          error: 'User not found',
+        };
+      }
 
       const result = await this.config.sendLinePush(
-        lineUserId,
+        user.lineUserId,
         notification.title,
         notification.body,
         notification.data
       );
 
       if (result.success) {
-        notification.status = 'sent';
-        notification.sentAt = new Date();
-        notification.updatedAt = new Date();
+        await this.db
+          .update(notifications)
+          .set({
+            status: 'sent',
+            sentAt: new Date(),
+            lineMessageId: result.messageId,
+          })
+          .where(eq(notifications.id, notification.id));
 
         return {
           notificationId: notification.id,
           success: true,
           lineMessageId: result.messageId,
-          deliveredAt: notification.sentAt,
+          deliveredAt: new Date(),
         };
       } else {
-        notification.status = 'failed';
-        notification.updatedAt = new Date();
+        await this.db
+          .update(notifications)
+          .set({
+            status: 'failed',
+            errorMessage: result.error,
+          })
+          .where(eq(notifications.id, notification.id));
 
         return {
           notificationId: notification.id,
@@ -242,13 +285,20 @@ export class NotificationService {
         };
       }
     } catch (error) {
-      notification.status = 'failed';
-      notification.updatedAt = new Date();
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      await this.db
+        .update(notifications)
+        .set({
+          status: 'failed',
+          errorMessage,
+        })
+        .where(eq(notifications.id, notification.id));
 
       return {
         notificationId: notification.id,
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       };
     }
   }
@@ -270,67 +320,82 @@ export class NotificationService {
     } = {}
   ): Promise<Notification[]> {
     const { status, type, limit = 50, offset = 0 } = options;
-    const notifications: Notification[] = [];
 
-    for (const notification of MOCK_NOTIFICATIONS.values()) {
-      if (notification.userId !== userId) continue;
-      if (status && notification.status !== status) continue;
-      if (type && notification.type !== type) continue;
+    const conditions = [eq(notifications.userId, userId)];
 
-      notifications.push(notification);
+    if (status) {
+      conditions.push(eq(notifications.status, status));
+    }
+    if (type) {
+      conditions.push(eq(notifications.type, type));
     }
 
-    // Sort by createdAt descending
-    notifications.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const results = await this.db
+      .select()
+      .from(notifications)
+      .where(and(...conditions))
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit)
+      .offset(offset);
 
-    return notifications.slice(offset, offset + limit);
+    return results.map((n) => this.mapToNotification(n));
   }
 
   /**
    * Gets a notification by ID.
    */
   async getNotificationById(id: string): Promise<Notification | null> {
-    return MOCK_NOTIFICATIONS.get(id) ?? null;
+    const [notification] = await this.db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.id, id))
+      .limit(1);
+
+    if (!notification) return null;
+    return this.mapToNotification(notification);
   }
 
   /**
    * Marks a notification as read.
    */
   async markAsRead(notificationId: string): Promise<boolean> {
-    const notification = MOCK_NOTIFICATIONS.get(notificationId);
-    if (!notification) return false;
+    const result = await this.db
+      .update(notifications)
+      .set({
+        status: 'read',
+        readAt: new Date(),
+      })
+      .where(eq(notifications.id, notificationId))
+      .returning({ id: notifications.id });
 
-    notification.status = 'read';
-    notification.readAt = new Date();
-    notification.updatedAt = new Date();
-
-    return true;
+    return result.length > 0;
   }
 
   /**
    * Marks a notification as dismissed.
    */
   async markAsDismissed(notificationId: string): Promise<boolean> {
-    const notification = MOCK_NOTIFICATIONS.get(notificationId);
-    if (!notification) return false;
+    const result = await this.db
+      .update(notifications)
+      .set({
+        status: 'dismissed',
+      })
+      .where(eq(notifications.id, notificationId))
+      .returning({ id: notifications.id });
 
-    notification.status = 'dismissed';
-    notification.updatedAt = new Date();
-
-    return true;
+    return result.length > 0;
   }
 
   /**
    * Gets unread notification count for a user.
    */
   async getUnreadCount(userId: string): Promise<number> {
-    let count = 0;
-    for (const notification of MOCK_NOTIFICATIONS.values()) {
-      if (notification.userId === userId && notification.status === 'sent') {
-        count++;
-      }
-    }
-    return count;
+    const [result] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.status, 'sent')));
+
+    return result?.count ?? 0;
   }
 
   // ============================================
@@ -342,8 +407,32 @@ export class NotificationService {
    * Returns default preferences if none exist.
    */
   async getUserPreferences(userId: string): Promise<NotificationPreferences> {
-    const existing = MOCK_PREFERENCES.get(userId);
-    if (existing) return existing;
+    const [existing] = await this.db
+      .select()
+      .from(notificationPreferences)
+      .where(eq(notificationPreferences.userId, userId))
+      .limit(1);
+
+    if (existing) {
+      return {
+        userId: existing.userId,
+        enabled: existing.enabled,
+        quietHoursStart: existing.quietHoursStart ?? undefined,
+        quietHoursEnd: existing.quietHoursEnd ?? undefined,
+        timezone: existing.timezone,
+        harvestReminders: existing.harvestReminders,
+        harvestReminderDays: existing.harvestReminderDays,
+        weatherAlerts: existing.weatherAlerts,
+        priceAlerts: existing.priceAlerts,
+        priceAlertThreshold: existing.priceAlertThreshold,
+        demandNotifications: existing.demandNotifications,
+        matchNotifications: existing.matchNotifications,
+        cooperativeAnnouncements: existing.cooperativeAnnouncements,
+        dailyDigest: existing.dailyDigest,
+        digestTime: existing.digestTime ?? undefined,
+        updatedAt: existing.updatedAt,
+      };
+    }
 
     // Return defaults
     return {
@@ -370,21 +459,102 @@ export class NotificationService {
     userId: string,
     updates: Partial<Omit<NotificationPreferences, 'userId' | 'updatedAt'>>
   ): Promise<NotificationPreferences> {
-    const existing = await this.getUserPreferences(userId);
-    const updated: NotificationPreferences = {
-      ...existing,
-      ...updates,
-      userId,
-      updatedAt: new Date(),
-    };
+    // Check if preferences exist
+    const [existing] = await this.db
+      .select({ id: notificationPreferences.id })
+      .from(notificationPreferences)
+      .where(eq(notificationPreferences.userId, userId))
+      .limit(1);
 
-    MOCK_PREFERENCES.set(userId, updated);
-    return updated;
+    if (!existing) {
+      // Create new preferences
+      await this.db.insert(notificationPreferences).values({
+        userId,
+        enabled: updates.enabled ?? true,
+        quietHoursStart: updates.quietHoursStart,
+        quietHoursEnd: updates.quietHoursEnd,
+        timezone: updates.timezone ?? 'Asia/Taipei',
+        harvestReminders: updates.harvestReminders ?? true,
+        harvestReminderDays: updates.harvestReminderDays ?? 3,
+        weatherAlerts: updates.weatherAlerts ?? true,
+        priceAlerts: updates.priceAlerts ?? true,
+        priceAlertThreshold: updates.priceAlertThreshold ?? 15,
+        demandNotifications: updates.demandNotifications ?? true,
+        matchNotifications: updates.matchNotifications ?? true,
+        cooperativeAnnouncements: updates.cooperativeAnnouncements ?? true,
+        dailyDigest: updates.dailyDigest ?? false,
+        digestTime: updates.digestTime,
+      });
+    } else {
+      // Update existing preferences
+      await this.db
+        .update(notificationPreferences)
+        .set({
+          enabled: updates.enabled,
+          quietHoursStart: updates.quietHoursStart,
+          quietHoursEnd: updates.quietHoursEnd,
+          timezone: updates.timezone,
+          harvestReminders: updates.harvestReminders,
+          harvestReminderDays: updates.harvestReminderDays,
+          weatherAlerts: updates.weatherAlerts,
+          priceAlerts: updates.priceAlerts,
+          priceAlertThreshold: updates.priceAlertThreshold,
+          demandNotifications: updates.demandNotifications,
+          matchNotifications: updates.matchNotifications,
+          cooperativeAnnouncements: updates.cooperativeAnnouncements,
+          dailyDigest: updates.dailyDigest,
+          digestTime: updates.digestTime,
+        })
+        .where(eq(notificationPreferences.userId, userId));
+    }
+
+    return this.getUserPreferences(userId);
   }
 
   // ============================================
   // Helper Methods
   // ============================================
+
+  /**
+   * Maps a database notification record to the Notification type.
+   */
+  private mapToNotification(record: {
+    id: string;
+    userId: string;
+    cooperativeId: string;
+    type: string;
+    priority: string;
+    title: string;
+    body: string;
+    data: unknown;
+    relatedEntityId: string | null;
+    relatedEntityType: string | null;
+    status: string;
+    scheduledAt: Date | null;
+    sentAt: Date | null;
+    readAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }): Notification {
+    return {
+      id: record.id,
+      userId: record.userId,
+      cooperativeId: record.cooperativeId,
+      type: record.type as NotificationType,
+      priority: record.priority as NotificationPriority,
+      title: record.title,
+      body: record.body,
+      data: record.data as Record<string, unknown> | undefined,
+      relatedEntityId: record.relatedEntityId ?? undefined,
+      relatedEntityType: record.relatedEntityType ?? undefined,
+      status: record.status as NotificationStatus,
+      scheduledAt: record.scheduledAt ?? undefined,
+      sentAt: record.sentAt ?? undefined,
+      readAt: record.readAt ?? undefined,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    };
+  }
 
   /**
    * Checks if a notification type should be sent based on user preferences.
@@ -461,6 +631,9 @@ export class NotificationService {
 /**
  * Factory function to create a notification service.
  */
-export function createNotificationService(config?: NotificationServiceConfig): NotificationService {
-  return new NotificationService(config);
+export function createNotificationService(
+  config?: NotificationServiceConfig,
+  db?: Database
+): NotificationService {
+  return new NotificationService(config, db);
 }

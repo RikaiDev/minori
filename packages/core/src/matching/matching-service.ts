@@ -5,6 +5,16 @@
  * Coordinates between demands, supply, and match creation.
  */
 
+import { eq, and, gt, or, gte, lte, desc } from 'drizzle-orm';
+import {
+  getDatabase,
+  demands,
+  matches,
+  plantingRecords,
+  users,
+  cooperatives,
+  type Database,
+} from '@minori/database';
 import type {
   DemandRequest,
   SupplyDemandMatch,
@@ -20,72 +30,6 @@ import {
   type SupplyCandidate,
   type MatchingWeights,
 } from './matching-algorithm';
-
-/**
- * Mock data for supply candidates.
- * TODO: Replace with database queries in production.
- */
-const MOCK_SUPPLY: SupplyCandidate[] = [
-  {
-    plantingRecordId: 'pr_001',
-    farmerId: 'farmer_001',
-    farmerName: '王大明',
-    cropId: 'bok-choy',
-    cropName: '小白菜',
-    availableQuantity: 150,
-    expectedHarvestDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    expectedQualityGrade: 'A',
-    expectedPricePerKg: 35,
-    region: 'central',
-    predictionConfidence: 0.85,
-  },
-  {
-    plantingRecordId: 'pr_002',
-    farmerId: 'farmer_002',
-    farmerName: '李小華',
-    cropId: 'bok-choy',
-    cropName: '小白菜',
-    availableQuantity: 80,
-    expectedHarvestDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
-    expectedQualityGrade: 'B',
-    expectedPricePerKg: 30,
-    region: 'north',
-    predictionConfidence: 0.78,
-  },
-  {
-    plantingRecordId: 'pr_003',
-    farmerId: 'farmer_003',
-    farmerName: '張阿國',
-    cropId: 'tomato',
-    cropName: '番茄',
-    availableQuantity: 200,
-    expectedHarvestDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
-    expectedQualityGrade: 'A',
-    expectedPricePerKg: 45,
-    region: 'south',
-    predictionConfidence: 0.82,
-  },
-  {
-    plantingRecordId: 'pr_004',
-    farmerId: 'farmer_001',
-    farmerName: '王大明',
-    cropId: 'cabbage',
-    cropName: '高麗菜',
-    availableQuantity: 300,
-    expectedHarvestDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-    expectedQualityGrade: 'A',
-    expectedPricePerKg: 25,
-    region: 'central',
-    predictionConfidence: 0.88,
-  },
-];
-
-/**
- * Mock demands for testing.
- * TODO: Replace with database queries in production.
- */
-const MOCK_DEMANDS: DemandRequest[] = [];
-let demandIdCounter = 1;
 
 /**
  * Configuration for the matching service.
@@ -118,10 +62,12 @@ const DEFAULT_CONFIG: Required<MatchingServiceConfig> = {
 export class MatchingService {
   private cooperativeId: string;
   private config: Required<MatchingServiceConfig>;
+  private db: Database;
 
-  constructor(cooperativeId: string, config?: MatchingServiceConfig) {
+  constructor(cooperativeId: string, config?: MatchingServiceConfig, db?: Database) {
     this.cooperativeId = cooperativeId;
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.db = db ?? getDatabase();
   }
 
   // ============================================
@@ -134,43 +80,80 @@ export class MatchingService {
   async createDemand(
     demand: Omit<DemandRequest, 'id' | 'matchedQuantity' | 'status' | 'createdAt' | 'updatedAt'>
   ): Promise<DemandRequest> {
-    const now = new Date();
-    const newDemand: DemandRequest = {
-      ...demand,
-      id: `demand_${demandIdCounter++}`,
-      matchedQuantity: 0,
-      status: 'pending',
-      createdAt: now,
-      updatedAt: now,
-    };
+    const insertedDemands = await this.db
+      .insert(demands)
+      .values({
+        buyerId: demand.buyerId,
+        buyerName: demand.buyerName,
+        cooperativeId: demand.cooperativeId ?? this.cooperativeId,
+        cropId: demand.cropId,
+        cropName: demand.cropName,
+        quantity: demand.quantity.toString(),
+        matchedQuantity: '0',
+        minQualityGrade: demand.minQualityGrade as 'A' | 'B' | 'C' | 'D' | undefined,
+        deliveryDateStart: demand.deliveryDateStart,
+        deliveryDateEnd: demand.deliveryDateEnd,
+        maxPricePerKg: demand.maxPricePerKg?.toString(),
+        preferredRegion: demand.preferredRegion as
+          | 'north'
+          | 'central'
+          | 'south'
+          | 'east'
+          | undefined,
+        priority: demand.priority,
+        status: 'pending',
+        notes: demand.notes,
+        expiresAt: demand.expiresAt,
+      })
+      .returning();
 
-    MOCK_DEMANDS.push(newDemand);
-    return newDemand;
+    const inserted = insertedDemands[0];
+    if (!inserted) {
+      throw new Error('Failed to create demand');
+    }
+
+    return this.mapToDemandRequest(inserted);
   }
 
   /**
    * Gets pending demands for the cooperative.
    */
   async getPendingDemands(): Promise<DemandRequest[]> {
-    return MOCK_DEMANDS.filter(
-      (d) =>
-        d.cooperativeId === this.cooperativeId &&
-        (d.status === 'pending' || d.status === 'partially_matched')
-    );
+    const results = await this.db
+      .select()
+      .from(demands)
+      .where(
+        and(
+          eq(demands.cooperativeId, this.cooperativeId),
+          or(eq(demands.status, 'pending'), eq(demands.status, 'partially_matched'))
+        )
+      )
+      .orderBy(desc(demands.createdAt));
+
+    return results.map((d) => this.mapToDemandRequest(d));
   }
 
   /**
    * Gets all demands for the cooperative.
    */
   async getAllDemands(): Promise<DemandRequest[]> {
-    return MOCK_DEMANDS.filter((d) => d.cooperativeId === this.cooperativeId);
+    const results = await this.db
+      .select()
+      .from(demands)
+      .where(eq(demands.cooperativeId, this.cooperativeId))
+      .orderBy(desc(demands.createdAt));
+
+    return results.map((d) => this.mapToDemandRequest(d));
   }
 
   /**
    * Gets a demand by ID.
    */
   async getDemandById(demandId: string): Promise<DemandRequest | null> {
-    return MOCK_DEMANDS.find((d) => d.id === demandId) ?? null;
+    const [demand] = await this.db.select().from(demands).where(eq(demands.id, demandId)).limit(1);
+
+    if (!demand) return null;
+    return this.mapToDemandRequest(demand);
   }
 
   /**
@@ -181,16 +164,20 @@ export class MatchingService {
     status: DemandRequest['status'],
     matchedQuantity?: number
   ): Promise<DemandRequest | null> {
-    const demand = MOCK_DEMANDS.find((d) => d.id === demandId);
-    if (!demand) return null;
-
-    demand.status = status;
+    const updateData: Record<string, unknown> = { status };
     if (matchedQuantity !== undefined) {
-      demand.matchedQuantity = matchedQuantity;
+      updateData.matchedQuantity = matchedQuantity.toString();
     }
-    demand.updatedAt = new Date();
 
-    return demand;
+    const updatedDemands = await this.db
+      .update(demands)
+      .set(updateData)
+      .where(eq(demands.id, demandId))
+      .returning();
+
+    const updated = updatedDemands[0];
+    if (!updated) return null;
+    return this.mapToDemandRequest(updated);
   }
 
   /**
@@ -207,12 +194,50 @@ export class MatchingService {
 
   /**
    * Gets available supply candidates for matching.
-   * TODO: Replace with database query.
    */
   async getAvailableSupply(): Promise<SupplyCandidate[]> {
-    // In production, this would query active planting records
-    // with expectedHarvestDate in the near future
-    return MOCK_SUPPLY.filter((s) => s.availableQuantity > 0 && s.expectedHarvestDate > new Date());
+    const now = new Date();
+
+    // Query active planting records with expected harvest in the future
+    // Join with users to get farmer info and cooperative region
+    const results = await this.db
+      .select({
+        plantingRecordId: plantingRecords.id,
+        farmerId: plantingRecords.userId,
+        farmerName: users.name,
+        cropId: plantingRecords.cropId,
+        cropName: plantingRecords.cropName,
+        expectedYield: plantingRecords.expectedYield,
+        expectedHarvestDate: plantingRecords.expectedHarvestDate,
+        predictionConfidence: plantingRecords.predictionConfidence,
+        region: cooperatives.region,
+      })
+      .from(plantingRecords)
+      .innerJoin(users, eq(plantingRecords.userId, users.id))
+      .innerJoin(cooperatives, eq(users.cooperativeId, cooperatives.id))
+      .where(
+        and(
+          eq(plantingRecords.status, 'active'),
+          gt(plantingRecords.expectedHarvestDate, now),
+          eq(users.cooperativeId, this.cooperativeId)
+        )
+      );
+
+    return results
+      .filter((r) => r.expectedYield && r.expectedYield > 0 && r.expectedHarvestDate)
+      .map((r) => ({
+        plantingRecordId: r.plantingRecordId,
+        farmerId: r.farmerId,
+        farmerName: r.farmerName ?? 'Unknown',
+        cropId: r.cropId,
+        cropName: r.cropName,
+        availableQuantity: r.expectedYield!,
+        expectedHarvestDate: r.expectedHarvestDate!,
+        expectedQualityGrade: 'B' as const, // Default, would need growth records for actual grade
+        expectedPricePerKg: 30, // Default, would need price service for actual price
+        region: (r.region as 'north' | 'central' | 'south' | 'east') ?? 'central',
+        predictionConfidence: r.predictionConfidence ?? 0.8,
+      }));
   }
 
   /**
@@ -327,25 +352,41 @@ export class MatchingService {
       remainingQuantity
     );
 
-    // Create match records
-    const now = new Date();
-    const matches: SupplyDemandMatch[] = allocations.map((allocation, index) => ({
-      id: `match_${demandId}_${index}`,
-      demandId,
-      plantingRecordId: allocation.plantingRecordId,
-      farmerId: allocation.farmerId,
-      farmerName: allocation.farmerName,
-      cooperativeId: this.cooperativeId,
-      cropId: suggestion.demand.cropId,
-      cropName: suggestion.demand.cropName,
-      quantity: allocation.allocatedQuantity,
-      expectedHarvestDate: allocation.expectedHarvestDate,
-      expectedQualityGrade: allocation.expectedQualityGrade,
-      score: allocation.score,
-      status: 'suggested',
-      createdAt: now,
-      updatedAt: now,
-    }));
+    // Create match records in database
+    const createdMatches: SupplyDemandMatch[] = [];
+
+    for (const allocation of allocations) {
+      const insertedMatches = await this.db
+        .insert(matches)
+        .values({
+          demandId,
+          plantingRecordId: allocation.plantingRecordId,
+          farmerId: allocation.farmerId,
+          farmerName: allocation.farmerName,
+          cooperativeId: this.cooperativeId,
+          cropId: suggestion.demand.cropId,
+          cropName: suggestion.demand.cropName,
+          quantity: allocation.allocatedQuantity.toString(),
+          expectedHarvestDate: allocation.expectedHarvestDate,
+          expectedQualityGrade: allocation.expectedQualityGrade as 'A' | 'B' | 'C' | 'D',
+          score: {
+            overall: allocation.score.overall,
+            cropMatch: allocation.score.cropMatch,
+            quantityMatch: allocation.score.quantityMatch,
+            dateMatch: allocation.score.dateMatch,
+            priceMatch: allocation.score.priceMatch,
+            qualityMatch: allocation.score.qualityMatch,
+            regionMatch: allocation.score.regionMatch,
+          },
+          status: 'suggested',
+        })
+        .returning();
+
+      const inserted = insertedMatches[0];
+      if (inserted) {
+        createdMatches.push(this.mapToSupplyDemandMatch(inserted));
+      }
+    }
 
     // Update demand matched quantity
     const totalMatched =
@@ -361,7 +402,7 @@ export class MatchingService {
 
     await this.updateDemandStatus(demandId, newStatus, totalMatched);
 
-    return matches;
+    return createdMatches;
   }
 
   // ============================================
@@ -372,10 +413,17 @@ export class MatchingService {
    * Gets matching summary for the cooperative.
    */
   async getMatchingSummary(periodStart: Date, periodEnd: Date): Promise<MatchingSummary> {
-    const allDemands = await this.getAllDemands();
-    const periodDemands = allDemands.filter(
-      (d) => d.createdAt >= periodStart && d.createdAt <= periodEnd
-    );
+    // Get demands in period
+    const periodDemands = await this.db
+      .select()
+      .from(demands)
+      .where(
+        and(
+          eq(demands.cooperativeId, this.cooperativeId),
+          gte(demands.createdAt, periodStart),
+          lte(demands.createdAt, periodEnd)
+        )
+      );
 
     // Count by status
     const statusCounts = {
@@ -388,7 +436,7 @@ export class MatchingService {
     };
 
     for (const demand of periodDemands) {
-      statusCounts[demand.status]++;
+      statusCounts[demand.status as keyof typeof statusCounts]++;
     }
 
     // Aggregate by crop
@@ -398,14 +446,15 @@ export class MatchingService {
     >();
 
     for (const demand of periodDemands) {
-      if (demand.matchedQuantity > 0) {
+      const matchedQty = parseFloat(demand.matchedQuantity);
+      if (matchedQty > 0) {
         const existing = cropStats.get(demand.cropId) ?? {
           cropName: demand.cropName,
           matchCount: 0,
           totalQuantity: 0,
         };
         existing.matchCount++;
-        existing.totalQuantity += demand.matchedQuantity;
+        existing.totalQuantity += matchedQty;
         cropStats.set(demand.cropId, existing);
       }
     }
@@ -422,6 +471,10 @@ export class MatchingService {
 
     const matchedCount = statusCounts.matched + statusCounts.fulfilled;
     const totalWithMatches = statusCounts.partially_matched + matchedCount;
+    const totalQuantityMatched = periodDemands.reduce(
+      (sum, d) => sum + parseFloat(d.matchedQuantity),
+      0
+    );
 
     return {
       cooperativeId: this.cooperativeId,
@@ -434,8 +487,116 @@ export class MatchingService {
       totalMatches: totalWithMatches,
       acceptedMatches: matchedCount, // Simplified for now
       successRate: periodDemands.length > 0 ? matchedCount / periodDemands.length : 0,
-      totalQuantityMatched: periodDemands.reduce((sum, d) => sum + d.matchedQuantity, 0),
+      totalQuantityMatched,
       topCrops,
+    };
+  }
+
+  // ============================================
+  // Helper Methods
+  // ============================================
+
+  /**
+   * Maps a database demand record to DemandRequest type.
+   */
+  private mapToDemandRequest(record: {
+    id: string;
+    buyerId: string;
+    buyerName: string | null;
+    cooperativeId: string | null;
+    cropId: string;
+    cropName: string;
+    quantity: string;
+    matchedQuantity: string;
+    minQualityGrade: string | null;
+    deliveryDateStart: Date;
+    deliveryDateEnd: Date;
+    maxPricePerKg: string | null;
+    preferredRegion: string | null;
+    priority: string;
+    status: string;
+    notes: string | null;
+    expiresAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }): DemandRequest {
+    return {
+      id: record.id,
+      buyerId: record.buyerId,
+      buyerName: record.buyerName ?? undefined,
+      cooperativeId: record.cooperativeId ?? undefined,
+      cropId: record.cropId,
+      cropName: record.cropName,
+      quantity: parseFloat(record.quantity),
+      matchedQuantity: parseFloat(record.matchedQuantity),
+      minQualityGrade: record.minQualityGrade as 'A' | 'B' | 'C' | 'D' | undefined,
+      deliveryDateStart: record.deliveryDateStart,
+      deliveryDateEnd: record.deliveryDateEnd,
+      maxPricePerKg: record.maxPricePerKg ? parseFloat(record.maxPricePerKg) : undefined,
+      preferredRegion: record.preferredRegion as 'north' | 'central' | 'south' | 'east' | undefined,
+      priority: record.priority as 'low' | 'medium' | 'high' | 'urgent',
+      status: record.status as DemandRequest['status'],
+      notes: record.notes ?? undefined,
+      expiresAt: record.expiresAt ?? undefined,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    };
+  }
+
+  /**
+   * Maps a database match record to SupplyDemandMatch type.
+   */
+  private mapToSupplyDemandMatch(record: {
+    id: string;
+    demandId: string;
+    plantingRecordId: string;
+    farmerId: string;
+    farmerName: string | null;
+    cooperativeId: string;
+    cropId: string;
+    cropName: string;
+    quantity: string;
+    expectedHarvestDate: Date;
+    expectedQualityGrade: string | null;
+    score: unknown;
+    status: string;
+    createdAt: Date;
+    updatedAt: Date;
+  }): SupplyDemandMatch {
+    const scoreData = record.score as {
+      overall: number;
+      cropMatch: number;
+      quantityMatch: number;
+      dateMatch: number;
+      priceMatch?: number;
+      qualityMatch?: number;
+      regionMatch?: number;
+    };
+
+    return {
+      id: record.id,
+      demandId: record.demandId,
+      plantingRecordId: record.plantingRecordId,
+      farmerId: record.farmerId,
+      farmerName: record.farmerName ?? undefined,
+      cooperativeId: record.cooperativeId,
+      cropId: record.cropId,
+      cropName: record.cropName,
+      quantity: parseFloat(record.quantity),
+      expectedHarvestDate: record.expectedHarvestDate,
+      expectedQualityGrade: record.expectedQualityGrade as 'A' | 'B' | 'C' | 'D' | undefined,
+      score: {
+        overall: scoreData.overall,
+        cropMatch: scoreData.cropMatch,
+        quantityMatch: scoreData.quantityMatch,
+        dateMatch: scoreData.dateMatch,
+        priceMatch: scoreData.priceMatch ?? 0,
+        qualityMatch: scoreData.qualityMatch ?? 0,
+        regionMatch: scoreData.regionMatch ?? 0,
+      },
+      status: record.status as SupplyDemandMatch['status'],
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
     };
   }
 }
@@ -445,7 +606,8 @@ export class MatchingService {
  */
 export function createMatchingService(
   cooperativeId: string,
-  config?: MatchingServiceConfig
+  config?: MatchingServiceConfig,
+  db?: Database
 ): MatchingService {
-  return new MatchingService(cooperativeId, config);
+  return new MatchingService(cooperativeId, config, db);
 }

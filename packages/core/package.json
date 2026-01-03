@@ -16,6 +16,8 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@minori/shared": "workspace:*"
+    "@minori/database": "workspace:*",
+    "@minori/shared": "workspace:*",
+    "drizzle-orm": "^0.38.3"
   }
 }

@@ -5,81 +5,25 @@
  * Enables cooperative administrators to query member data and generate reports.
  */
 
+import { eq, and, gte, lte } from 'drizzle-orm';
+import { getDatabase, plantingRecords, users, type Database } from '@minori/database';
 import type { CropSummary, SupplyItem, MemberCropReport, SupplyReport } from '@minori/shared';
 import { getCropById } from '../crops/crop-database';
 import { predictHarvest } from '../prediction/harvest-predictor';
 
 /**
- * Mock farmer data for development.
- * TODO: Replace with actual database queries.
+ * Internal farmer record type from database query.
  */
-interface MockFarmerRecord {
+interface FarmerRecord {
   farmerId: string;
-  farmerName: string;
+  farmerName: string | null;
   cropId: string;
+  cropName: string;
   area: number;
   plantingDate: Date;
-}
-
-/**
- * Generates mock farmer records for development.
- * In production, this would query the database.
- */
-function getMockFarmerRecords(): MockFarmerRecord[] {
-  const today = new Date();
-  const daysAgo = (days: number) => new Date(today.getTime() - days * 24 * 60 * 60 * 1000);
-
-  return [
-    {
-      farmerId: 'f1',
-      farmerName: '王大明',
-      cropId: 'bok-choy',
-      area: 2,
-      plantingDate: daysAgo(25),
-    },
-    {
-      farmerId: 'f2',
-      farmerName: '李小華',
-      cropId: 'bok-choy',
-      area: 1.5,
-      plantingDate: daysAgo(20),
-    },
-    {
-      farmerId: 'f3',
-      farmerName: '張阿土',
-      cropId: 'bok-choy',
-      area: 3,
-      plantingDate: daysAgo(28),
-    },
-    {
-      farmerId: 'f1',
-      farmerName: '王大明',
-      cropId: 'water-spinach',
-      area: 1,
-      plantingDate: daysAgo(22),
-    },
-    {
-      farmerId: 'f4',
-      farmerName: '陳美玉',
-      cropId: 'water-spinach',
-      area: 2,
-      plantingDate: daysAgo(18),
-    },
-    {
-      farmerId: 'f2',
-      farmerName: '李小華',
-      cropId: 'tomato',
-      area: 0.5,
-      plantingDate: daysAgo(45),
-    },
-    {
-      farmerId: 'f3',
-      farmerName: '張阿土',
-      cropId: 'cucumber',
-      area: 1,
-      plantingDate: daysAgo(30),
-    },
-  ];
+  expectedHarvestDate: Date | null;
+  expectedYield: number | null;
+  predictionConfidence: number | null;
 }
 
 /**
@@ -87,9 +31,46 @@ function getMockFarmerRecords(): MockFarmerRecord[] {
  */
 export class CooperativeService {
   private cooperativeId: string;
+  private db: Database;
 
-  constructor(cooperativeId: string = 'default') {
+  constructor(cooperativeId: string = 'default', db?: Database) {
     this.cooperativeId = cooperativeId;
+    this.db = db ?? getDatabase();
+  }
+
+  /**
+   * Gets active planting records for all cooperative members.
+   */
+  private async getFarmerRecords(): Promise<FarmerRecord[]> {
+    const results = await this.db
+      .select({
+        farmerId: plantingRecords.userId,
+        farmerName: users.name,
+        cropId: plantingRecords.cropId,
+        cropName: plantingRecords.cropName,
+        area: plantingRecords.areaSize,
+        plantingDate: plantingRecords.plantedAt,
+        expectedHarvestDate: plantingRecords.expectedHarvestDate,
+        expectedYield: plantingRecords.expectedYield,
+        predictionConfidence: plantingRecords.predictionConfidence,
+      })
+      .from(plantingRecords)
+      .innerJoin(users, eq(plantingRecords.userId, users.id))
+      .where(
+        and(eq(users.cooperativeId, this.cooperativeId), eq(plantingRecords.status, 'active'))
+      );
+
+    return results.map((r) => ({
+      farmerId: r.farmerId,
+      farmerName: r.farmerName,
+      cropId: r.cropId,
+      cropName: r.cropName,
+      area: r.area,
+      plantingDate: r.plantingDate,
+      expectedHarvestDate: r.expectedHarvestDate,
+      expectedYield: r.expectedYield,
+      predictionConfidence: r.predictionConfidence,
+    }));
   }
 
   /**
@@ -98,11 +79,11 @@ export class CooperativeService {
    * @returns Member crop report with aggregated data
    */
   async getMemberCropReport(): Promise<MemberCropReport> {
-    const records = getMockFarmerRecords();
+    const records = await this.getFarmerRecords();
     const farmerIds = new Set(records.map((r) => r.farmerId));
 
     // Group by crop
-    const cropGroups = new Map<string, MockFarmerRecord[]>();
+    const cropGroups = new Map<string, FarmerRecord[]>();
     for (const record of records) {
       const existing = cropGroups.get(record.cropId) || [];
       existing.push(record);
@@ -125,8 +106,34 @@ export class CooperativeService {
         groupRecords.reduce((sum, r) => sum + r.plantingDate.getTime(), 0) / groupRecords.length;
       const avgPlantingDate = new Date(avgPlantingTime);
 
-      const prediction = predictHarvest(cropInfo, avgPlantingDate);
-      const estimatedYield = cropArea * cropInfo.yield.perArea;
+      // Use stored predictions if available, otherwise calculate
+      const recordsWithPrediction = groupRecords.filter((r) => r.expectedHarvestDate);
+      let estimatedHarvestDate: Date;
+      let confidence: number;
+      let estimatedYield: number;
+
+      if (recordsWithPrediction.length > 0) {
+        // Use average of stored predictions
+        const avgHarvestTime =
+          recordsWithPrediction.reduce((sum, r) => sum + r.expectedHarvestDate!.getTime(), 0) /
+          recordsWithPrediction.length;
+        estimatedHarvestDate = new Date(avgHarvestTime);
+
+        confidence =
+          recordsWithPrediction.reduce((sum, r) => sum + (r.predictionConfidence ?? 0.7), 0) /
+          recordsWithPrediction.length;
+
+        estimatedYield = groupRecords.reduce(
+          (sum, r) => sum + (r.expectedYield ?? r.area * cropInfo.yield.perArea),
+          0
+        );
+      } else {
+        // Fall back to calculating prediction
+        const prediction = predictHarvest(cropInfo, avgPlantingDate);
+        estimatedHarvestDate = prediction.predictions.likely;
+        confidence = prediction.confidence;
+        estimatedYield = cropArea * cropInfo.yield.perArea;
+      }
 
       crops.push({
         cropId,
@@ -134,8 +141,8 @@ export class CooperativeService {
         totalArea: cropArea,
         farmerCount: new Set(groupRecords.map((r) => r.farmerId)).size,
         estimatedYield,
-        estimatedHarvestDate: prediction.predictions.likely,
-        confidence: prediction.confidence,
+        estimatedHarvestDate,
+        confidence,
       });
     }
 
@@ -159,61 +166,94 @@ export class CooperativeService {
    * @returns Supply report with available items
    */
   async getSupplyReport(periodStart: Date, periodEnd: Date): Promise<SupplyReport> {
-    const records = getMockFarmerRecords();
+    // Query records that have expected harvest dates in the period
+    const results = await this.db
+      .select({
+        farmerId: plantingRecords.userId,
+        farmerName: users.name,
+        cropId: plantingRecords.cropId,
+        cropName: plantingRecords.cropName,
+        area: plantingRecords.areaSize,
+        plantingDate: plantingRecords.plantedAt,
+        expectedHarvestDate: plantingRecords.expectedHarvestDate,
+        expectedYield: plantingRecords.expectedYield,
+      })
+      .from(plantingRecords)
+      .innerJoin(users, eq(plantingRecords.userId, users.id))
+      .where(
+        and(
+          eq(users.cooperativeId, this.cooperativeId),
+          eq(plantingRecords.status, 'active'),
+          gte(plantingRecords.expectedHarvestDate, periodStart),
+          lte(plantingRecords.expectedHarvestDate, periodEnd)
+        )
+      );
 
     // Group by crop
-    const cropGroups = new Map<string, MockFarmerRecord[]>();
-    for (const record of records) {
-      const existing = cropGroups.get(record.cropId) || [];
-      existing.push(record);
-      cropGroups.set(record.cropId, existing);
+    const cropGroups = new Map<
+      string,
+      {
+        cropId: string;
+        cropName: string;
+        farmers: Array<{
+          farmerId: string;
+          farmerName: string;
+          quantity: number;
+          harvestDate: Date;
+        }>;
+      }
+    >();
+
+    for (const record of results) {
+      if (!record.expectedHarvestDate) continue;
+
+      const cropInfo = getCropById(record.cropId);
+      const quantity =
+        record.expectedYield ??
+        (cropInfo ? record.area * cropInfo.yield.perArea : record.area * 100);
+
+      let group = cropGroups.get(record.cropId);
+      if (!group) {
+        group = {
+          cropId: record.cropId,
+          cropName: record.cropName,
+          farmers: [],
+        };
+        cropGroups.set(record.cropId, group);
+      }
+
+      group.farmers.push({
+        farmerId: record.farmerId,
+        farmerName: record.farmerName ?? 'Unknown',
+        quantity,
+        harvestDate: record.expectedHarvestDate,
+      });
     }
 
+    // Build supply items
     const items: SupplyItem[] = [];
 
-    for (const [cropId, groupRecords] of cropGroups) {
-      const cropInfo = getCropById(cropId);
-      if (!cropInfo) continue;
+    for (const group of cropGroups.values()) {
+      if (group.farmers.length === 0) continue;
 
-      // Check each farmer's harvest prediction
-      const farmersInPeriod: SupplyItem['farmers'] = [];
-      let earliestDate: Date | null = null;
-      let latestDate: Date | null = null;
+      const sortedByDate = [...group.farmers].sort(
+        (a, b) => a.harvestDate.getTime() - b.harvestDate.getTime()
+      );
 
-      for (const record of groupRecords) {
-        const prediction = predictHarvest(cropInfo, record.plantingDate);
-        const harvestDate = prediction.predictions.likely;
+      const earliest = sortedByDate[0];
+      const latest = sortedByDate[sortedByDate.length - 1];
 
-        // Check if harvest falls within the period
-        if (harvestDate >= periodStart && harvestDate <= periodEnd) {
-          const quantity = record.area * cropInfo.yield.perArea;
-          farmersInPeriod.push({
-            farmerId: record.farmerId,
-            farmerName: record.farmerName,
-            quantity,
-            harvestDate,
-          });
+      if (!earliest || !latest) continue;
 
-          if (!earliestDate || harvestDate < earliestDate) {
-            earliestDate = harvestDate;
-          }
-          if (!latestDate || harvestDate > latestDate) {
-            latestDate = harvestDate;
-          }
-        }
-      }
-
-      if (farmersInPeriod.length > 0) {
-        items.push({
-          cropId,
-          cropName: cropInfo.name,
-          estimatedQuantity: farmersInPeriod.reduce((sum, f) => sum + f.quantity, 0),
-          farmerCount: farmersInPeriod.length,
-          earliestDate: earliestDate!,
-          latestDate: latestDate!,
-          farmers: farmersInPeriod,
-        });
-      }
+      items.push({
+        cropId: group.cropId,
+        cropName: group.cropName,
+        estimatedQuantity: group.farmers.reduce((sum, f) => sum + f.quantity, 0),
+        farmerCount: group.farmers.length,
+        earliestDate: earliest.harvestDate,
+        latestDate: latest.harvestDate,
+        farmers: group.farmers,
+      });
     }
 
     // Sort by total quantity (descending)
@@ -261,4 +301,11 @@ export class CooperativeService {
 
     return this.getSupplyReport(startOfWeek, endOfWeek);
   }
+}
+
+/**
+ * Factory function to create a cooperative service.
+ */
+export function createCooperativeService(cooperativeId: string, db?: Database): CooperativeService {
+  return new CooperativeService(cooperativeId, db);
 }

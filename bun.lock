@@ -42,7 +42,9 @@
       "name": "@minori/core",
       "version": "0.1.0",
       "dependencies": {
+        "@minori/database": "workspace:*",
         "@minori/shared": "workspace:*",
+        "drizzle-orm": "^0.38.3",
       },
     },
     "packages/database": {
@@ -66,7 +68,9 @@
         "@line/bot-sdk": "^9.6.0",
         "@minori/ai-engine": "workspace:*",
         "@minori/core": "workspace:*",
+        "@minori/database": "workspace:*",
         "@minori/shared": "workspace:*",
+        "drizzle-orm": "^0.38.3",
       },
     },
     "packages/shared": {
