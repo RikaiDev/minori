@@ -116,6 +116,18 @@ describe('ExportService', () => {
       // BOM is \uFEFF
       expect(data.charCodeAt(0)).toBe(0xfeff);
     });
+
+    test('exports to XLSX format', async () => {
+      const result = await exportService.exportMemberCropReport(mockMemberCropReport, 'xlsx');
+
+      expect(result.filename).toContain('會員作物報表');
+      expect(result.filename).toEndWith('.xlsx');
+      expect(result.mimeType).toBe(
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      expect(result.data).toBeInstanceOf(Buffer);
+      expect((result.data as Buffer).length).toBeGreaterThan(0);
+    });
   });
 
   describe('exportSupplyReport', () => {
@@ -153,6 +165,18 @@ describe('ExportService', () => {
 
       expect(result.filename).toContain('1/6');
       expect(result.filename).toContain('1/12');
+    });
+
+    test('exports to XLSX format', async () => {
+      const result = await exportService.exportSupplyReport(mockSupplyReport, 'xlsx');
+
+      expect(result.filename).toContain('出貨報表');
+      expect(result.filename).toEndWith('.xlsx');
+      expect(result.mimeType).toBe(
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      expect(result.data).toBeInstanceOf(Buffer);
+      expect((result.data as Buffer).length).toBeGreaterThan(0);
     });
   });
 });

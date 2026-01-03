@@ -7,6 +7,7 @@
 
 import type { MemberCropReport, SupplyReport, ExportFormat } from '@minori/shared';
 import { formatDate } from '@minori/shared';
+import ExcelJS from 'exceljs';
 
 /**
  * Export result containing the file data.
@@ -68,9 +69,7 @@ export class ExportService {
       case 'json':
         return this.exportMemberCropReportJson(report, timestamp);
       case 'xlsx':
-        // For now, return CSV with xlsx extension
-        // TODO: Add ExcelJS for proper XLSX support
-        return this.exportMemberCropReportCsv(report, timestamp, true);
+        return this.exportMemberCropReportXlsx(report, timestamp);
       default:
         return this.exportMemberCropReportCsv(report, timestamp);
     }
@@ -79,11 +78,7 @@ export class ExportService {
   /**
    * Exports member crop report to CSV format.
    */
-  private exportMemberCropReportCsv(
-    report: MemberCropReport,
-    timestamp: string,
-    asXlsx = false
-  ): ExportResult {
+  private exportMemberCropReportCsv(report: MemberCropReport, timestamp: string): ExportResult {
     const headers = [
       '作物名稱',
       '總面積(分地)',
@@ -108,9 +103,75 @@ export class ExportService {
     const csv = generateCsv(headers, rows);
 
     return {
-      filename: `會員作物報表_${timestamp}.${asXlsx ? 'csv' : 'csv'}`,
+      filename: `會員作物報表_${timestamp}.csv`,
       mimeType: 'text/csv; charset=utf-8',
       data: '\uFEFF' + csv, // Add BOM for Excel compatibility
+    };
+  }
+
+  /**
+   * Exports member crop report to XLSX format.
+   */
+  private async exportMemberCropReportXlsx(
+    report: MemberCropReport,
+    timestamp: string
+  ): Promise<ExportResult> {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'minori';
+    workbook.created = new Date();
+
+    const worksheet = workbook.addWorksheet('會員作物報表');
+
+    // Define columns with headers
+    worksheet.columns = [
+      { header: '作物名稱', key: 'cropName', width: 15 },
+      { header: '總面積(分地)', key: 'totalArea', width: 15 },
+      { header: '農友數', key: 'farmerCount', width: 10 },
+      { header: '預估產量(公斤)', key: 'estimatedYield', width: 18 },
+      { header: '預計採收日期', key: 'estimatedHarvestDate', width: 15 },
+      { header: '信心度(%)', key: 'confidence', width: 12 },
+    ];
+
+    // Style header row
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF4CAF50' },
+    };
+    headerRow.alignment = { horizontal: 'center' };
+
+    // Add data rows
+    for (const crop of report.crops) {
+      worksheet.addRow({
+        cropName: crop.cropName,
+        totalArea: crop.totalArea,
+        farmerCount: crop.farmerCount,
+        estimatedYield: crop.estimatedYield,
+        estimatedHarvestDate: formatDate(crop.estimatedHarvestDate),
+        confidence: Math.round(crop.confidence * 100),
+      });
+    }
+
+    // Add summary row
+    const summaryRow = worksheet.addRow({
+      cropName: `總計: ${report.totalFarmers} 位農友`,
+      totalArea: report.totalArea,
+      farmerCount: '',
+      estimatedYield: '',
+      estimatedHarvestDate: '',
+      confidence: '',
+    });
+    summaryRow.font = { bold: true };
+
+    // Generate buffer
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    return {
+      filename: `會員作物報表_${timestamp}.xlsx`,
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      data: Buffer.from(buffer),
     };
   }
 
@@ -147,9 +208,7 @@ export class ExportService {
       case 'json':
         return this.exportSupplyReportJson(report, timestamp, periodStr);
       case 'xlsx':
-        // For now, return CSV with xlsx extension
-        // TODO: Add ExcelJS for proper XLSX support
-        return this.exportSupplyReportCsv(report, timestamp, periodStr, true);
+        return this.exportSupplyReportXlsx(report, timestamp, periodStr);
       default:
         return this.exportSupplyReportCsv(report, timestamp, periodStr);
     }
@@ -161,8 +220,7 @@ export class ExportService {
   private exportSupplyReportCsv(
     report: SupplyReport,
     timestamp: string,
-    periodStr: string,
-    asXlsx = false
+    periodStr: string
   ): ExportResult {
     const headers = [
       '作物名稱',
@@ -191,9 +249,69 @@ export class ExportService {
     const csv = generateCsv(headers, rows);
 
     return {
-      filename: `出貨報表_${periodStr}_${timestamp}.${asXlsx ? 'csv' : 'csv'}`,
+      filename: `出貨報表_${periodStr}_${timestamp}.csv`,
       mimeType: 'text/csv; charset=utf-8',
       data: '\uFEFF' + csv, // Add BOM for Excel compatibility
+    };
+  }
+
+  /**
+   * Exports supply report to XLSX format.
+   */
+  private async exportSupplyReportXlsx(
+    report: SupplyReport,
+    timestamp: string,
+    periodStr: string
+  ): Promise<ExportResult> {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'minori';
+    workbook.created = new Date();
+
+    const worksheet = workbook.addWorksheet('出貨報表');
+
+    // Define columns with headers
+    worksheet.columns = [
+      { header: '作物名稱', key: 'cropName', width: 15 },
+      { header: '預估數量(公斤)', key: 'estimatedQuantity', width: 18 },
+      { header: '農友數', key: 'farmerCount', width: 10 },
+      { header: '最早採收日', key: 'earliestDate', width: 15 },
+      { header: '最晚採收日', key: 'latestDate', width: 15 },
+      { header: '農友明細', key: 'farmerDetails', width: 40 },
+    ];
+
+    // Style header row
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF2196F3' },
+    };
+    headerRow.alignment = { horizontal: 'center' };
+
+    // Add data rows
+    for (const item of report.items) {
+      const farmerDetails = item.farmers
+        .map((f) => `${f.farmerName}: ${f.quantity.toFixed(0)}kg`)
+        .join('; ');
+
+      worksheet.addRow({
+        cropName: item.cropName,
+        estimatedQuantity: item.estimatedQuantity,
+        farmerCount: item.farmerCount,
+        earliestDate: formatDate(item.earliestDate),
+        latestDate: formatDate(item.latestDate),
+        farmerDetails,
+      });
+    }
+
+    // Generate buffer
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    return {
+      filename: `出貨報表_${periodStr}_${timestamp}.xlsx`,
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      data: Buffer.from(buffer),
     };
   }
 
