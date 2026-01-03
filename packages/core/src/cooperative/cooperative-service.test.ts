@@ -1,16 +1,31 @@
 /**
- * Unit tests for Cooperative Service.
+ * Integration tests for Cooperative Service.
+ *
+ * These tests require a database connection (DATABASE_URL).
+ * They are skipped when running without a database.
  */
 
 import { describe, expect, test } from 'bun:test';
 import { CooperativeService } from './cooperative-service';
 
-describe('CooperativeService', () => {
-  const service = new CooperativeService('test-coop');
+// Skip integration tests when DATABASE_URL is not available
+const SKIP_INTEGRATION = !process.env.DATABASE_URL;
+const describeIntegration = SKIP_INTEGRATION ? describe.skip : describe;
+
+describeIntegration('CooperativeService', () => {
+  // Service is created lazily to avoid error when DATABASE_URL is not set
+  // (describe callback still runs even when skipped, but tests don't)
+  let service: CooperativeService;
+  const getService = () => {
+    if (!service) {
+      service = new CooperativeService('test-coop');
+    }
+    return service;
+  };
 
   describe('getMemberCropReport', () => {
     test('returns report with crops and farmers', async () => {
-      const report = await service.getMemberCropReport();
+      const report = await getService().getMemberCropReport();
 
       expect(report.cooperativeId).toBe('test-coop');
       expect(report.generatedAt).toBeInstanceOf(Date);
@@ -20,7 +35,7 @@ describe('CooperativeService', () => {
     });
 
     test('each crop has required fields', async () => {
-      const report = await service.getMemberCropReport();
+      const report = await getService().getMemberCropReport();
 
       for (const crop of report.crops) {
         expect(crop.cropId).toBeDefined();
@@ -35,7 +50,7 @@ describe('CooperativeService', () => {
     });
 
     test('crops are sorted by estimated harvest date', async () => {
-      const report = await service.getMemberCropReport();
+      const report = await getService().getMemberCropReport();
 
       for (let i = 1; i < report.crops.length; i++) {
         const prevDate = report.crops[i - 1]!.estimatedHarvestDate.getTime();
@@ -50,7 +65,7 @@ describe('CooperativeService', () => {
       const startDate = new Date();
       const endDate = new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-      const report = await service.getSupplyReport(startDate, endDate);
+      const report = await getService().getSupplyReport(startDate, endDate);
 
       expect(report.cooperativeId).toBe('test-coop');
       expect(report.periodStart).toEqual(startDate);
@@ -63,7 +78,7 @@ describe('CooperativeService', () => {
       const startDate = new Date();
       const endDate = new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-      const report = await service.getSupplyReport(startDate, endDate);
+      const report = await getService().getSupplyReport(startDate, endDate);
 
       for (const item of report.items) {
         expect(item.cropId).toBeDefined();
@@ -81,7 +96,7 @@ describe('CooperativeService', () => {
       const startDate = new Date();
       const endDate = new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-      const report = await service.getSupplyReport(startDate, endDate);
+      const report = await getService().getSupplyReport(startDate, endDate);
 
       for (let i = 1; i < report.items.length; i++) {
         const prevQty = report.items[i - 1]!.estimatedQuantity;
@@ -94,7 +109,7 @@ describe('CooperativeService', () => {
       const startDate = new Date();
       const endDate = new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-      const report = await service.getSupplyReport(startDate, endDate);
+      const report = await getService().getSupplyReport(startDate, endDate);
 
       for (const item of report.items) {
         for (const farmer of item.farmers) {
@@ -109,7 +124,7 @@ describe('CooperativeService', () => {
 
   describe('getNextWeekSupply', () => {
     test('returns supply for next 7 days', async () => {
-      const report = await service.getNextWeekSupply();
+      const report = await getService().getNextWeekSupply();
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -122,7 +137,7 @@ describe('CooperativeService', () => {
 
   describe('getThisWeekSupply', () => {
     test('returns supply for current week', async () => {
-      const report = await service.getThisWeekSupply();
+      const report = await getService().getThisWeekSupply();
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);

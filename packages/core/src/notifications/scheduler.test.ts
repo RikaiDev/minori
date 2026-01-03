@@ -1,5 +1,8 @@
 /**
  * Tests for Notification Scheduler
+ *
+ * Unit tests for DEFAULT_SCHEDULES work without a database.
+ * Integration tests require DATABASE_URL and are skipped otherwise.
  */
 
 import { describe, expect, test } from 'bun:test';
@@ -7,7 +10,12 @@ import { NotificationScheduler, createNotificationScheduler, DEFAULT_SCHEDULES }
 import { createNotificationService } from './notification-service';
 import type { TaiwanRegion } from '@minori/shared';
 
+// Skip integration tests when DATABASE_URL is not available
+const SKIP_INTEGRATION = !process.env.DATABASE_URL;
+const describeIntegration = SKIP_INTEGRATION ? describe.skip : describe;
+
 describe('NotificationScheduler', () => {
+  // Unit tests - no database required
   describe('DEFAULT_SCHEDULES', () => {
     test('has all expected default schedules', () => {
       expect(DEFAULT_SCHEDULES).toHaveLength(4);
@@ -38,7 +46,8 @@ describe('NotificationScheduler', () => {
     });
   });
 
-  describe('createNotificationScheduler', () => {
+  // Integration tests - require database
+  describeIntegration('createNotificationScheduler', () => {
     test('creates a scheduler with default schedules', () => {
       const notificationService = createNotificationService();
       const scheduler = createNotificationScheduler({ notificationService });
@@ -70,7 +79,7 @@ describe('NotificationScheduler', () => {
     });
   });
 
-  describe('registerJob', () => {
+  describeIntegration('registerJob', () => {
     test('registers a new job', () => {
       const notificationService = createNotificationService();
       const scheduler = createNotificationScheduler({
@@ -92,7 +101,7 @@ describe('NotificationScheduler', () => {
     });
   });
 
-  describe('getJobs', () => {
+  describeIntegration('getJobs', () => {
     test('returns all registered jobs', () => {
       const notificationService = createNotificationService();
       const scheduler = createNotificationScheduler({ notificationService });
@@ -109,7 +118,7 @@ describe('NotificationScheduler', () => {
     });
   });
 
-  describe('setJobActive', () => {
+  describeIntegration('setJobActive', () => {
     test('activates and deactivates jobs', () => {
       const notificationService = createNotificationService();
       const scheduler = createNotificationScheduler({ notificationService });
@@ -134,7 +143,7 @@ describe('NotificationScheduler', () => {
     });
   });
 
-  describe('runJob', () => {
+  describeIntegration('runJob', () => {
     test('runs a job immediately', async () => {
       const notificationService = createNotificationService();
       const scheduler = createNotificationScheduler({
@@ -192,7 +201,7 @@ describe('NotificationScheduler', () => {
     });
   });
 
-  describe('harvest reminder handler', () => {
+  describeIntegration('harvest reminder handler', () => {
     test('processes upcoming harvests', async () => {
       const notificationService = createNotificationService();
       const scheduler = createNotificationScheduler({
@@ -225,7 +234,7 @@ describe('NotificationScheduler', () => {
     });
   });
 
-  describe('weather alert handler', () => {
+  describeIntegration('weather alert handler', () => {
     test('processes weather alerts for regions', async () => {
       const notificationService = createNotificationService();
       const scheduler = createNotificationScheduler({
@@ -268,7 +277,7 @@ describe('NotificationScheduler', () => {
     });
   });
 
-  describe('price alert handler', () => {
+  describeIntegration('price alert handler', () => {
     test('processes price changes', async () => {
       const notificationService = createNotificationService();
       const scheduler = createNotificationScheduler({
@@ -310,7 +319,7 @@ describe('NotificationScheduler', () => {
     });
   });
 
-  describe('start and stop', () => {
+  describeIntegration('start and stop', () => {
     test('starts and stops scheduler', () => {
       const notificationService = createNotificationService();
       const scheduler = createNotificationScheduler({

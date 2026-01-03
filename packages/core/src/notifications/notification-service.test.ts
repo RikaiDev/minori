@@ -1,12 +1,19 @@
 /**
- * Tests for Notification Service
+ * Integration tests for Notification Service
+ *
+ * These tests require a database connection (DATABASE_URL).
+ * They are skipped when running without a database.
  */
 
 import { describe, expect, test } from 'bun:test';
 import { NotificationService, createNotificationService } from './notification-service';
 import type { NotificationPreferences } from '@minori/shared';
 
-describe('NotificationService', () => {
+// Skip integration tests when DATABASE_URL is not available
+const SKIP_INTEGRATION = !process.env.DATABASE_URL;
+const describeIntegration = SKIP_INTEGRATION ? describe.skip : describe;
+
+describeIntegration('NotificationService', () => {
   describe('createNotificationService', () => {
     test('creates a notification service instance', () => {
       const service = createNotificationService();

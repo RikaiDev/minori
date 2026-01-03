@@ -1,8 +1,16 @@
 /**
- * Tests for tenant service.
+ * Integration tests for tenant service.
+ *
+ * These tests require a database connection (DATABASE_URL).
+ * They are skipped when running without a database.
  */
 
 import { describe, expect, test } from 'bun:test';
+
+// Skip integration tests when DATABASE_URL is not available
+const SKIP_INTEGRATION = !process.env.DATABASE_URL;
+const describeIntegration = SKIP_INTEGRATION ? describe.skip : describe;
+
 import { TenantService, createTenantService } from './tenant-service';
 import { createAuthContext } from './auth-context';
 import type { TenantContext } from '@minori/shared';
@@ -32,7 +40,7 @@ function createFarmerContext(
   return createAuthContext(ctx);
 }
 
-describe('TenantService', () => {
+describeIntegration('TenantService', () => {
   describe('onboardCooperative', () => {
     test('creates cooperative and admin user', async () => {
       const service = createTenantService();
@@ -377,7 +385,7 @@ describe('TenantService', () => {
   });
 });
 
-describe('createTenantService', () => {
+describeIntegration('createTenantService', () => {
   test('creates service instance', () => {
     const service = createTenantService();
 
