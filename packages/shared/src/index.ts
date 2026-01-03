@@ -689,6 +689,231 @@ export interface MatchingSummary {
 }
 
 // ============================================================
+// Notification Types
+// ============================================================
+
+/**
+ * Types of notifications in the system.
+ */
+export type NotificationType =
+  | 'harvest_reminder' // Reminder before predicted harvest date
+  | 'harvest_confirmed' // Confirmation of recorded harvest
+  | 'planting_confirmed' // Confirmation of recorded planting
+  | 'planting_optimal' // Optimal planting window notification
+  | 'weather_alert' // Severe weather warning
+  | 'weather_forecast' // Weather forecast affecting crops
+  | 'price_alert' // Significant price change
+  | 'price_opportunity' // Price opportunity (high price to sell)
+  | 'demand_new' // New demand matching farmer's crops
+  | 'demand_urgent' // Urgent demand notification
+  | 'match_found' // New match suggestion
+  | 'match_accepted' // Match was accepted
+  | 'match_rejected' // Match was rejected
+  | 'match_fulfilled' // Match completed/fulfilled
+  | 'cooperative_announcement' // Cooperative-wide announcements
+  | 'system'; // System notifications
+
+/**
+ * Priority levels for notifications.
+ */
+export type NotificationPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+/**
+ * Delivery status of a notification.
+ */
+export type NotificationStatus =
+  | 'pending' // Waiting to be sent
+  | 'sent' // Successfully delivered
+  | 'failed' // Delivery failed
+  | 'read' // User has read the notification
+  | 'dismissed'; // User dismissed without reading
+
+/**
+ * Notification record.
+ */
+export interface Notification {
+  /** Unique identifier */
+  id: string;
+  /** User ID to receive the notification */
+  userId: string;
+  /** Cooperative ID for tenant context */
+  cooperativeId: string;
+  /** Type of notification */
+  type: NotificationType;
+  /** Priority level */
+  priority: NotificationPriority;
+  /** Notification title (i18n key or resolved text) */
+  title: string;
+  /** Notification body (i18n key or resolved text) */
+  body: string;
+  /** Additional data payload */
+  data?: Record<string, unknown>;
+  /** Related entity ID (e.g., match ID, demand ID) */
+  relatedEntityId?: string;
+  /** Related entity type */
+  relatedEntityType?: string;
+  /** Current status */
+  status: NotificationStatus;
+  /** Scheduled send time (null = send immediately) */
+  scheduledAt?: Date;
+  /** When the notification was sent */
+  sentAt?: Date;
+  /** When the notification was read */
+  readAt?: Date;
+  /** Created timestamp */
+  createdAt: Date;
+  /** Updated timestamp */
+  updatedAt: Date;
+}
+
+/**
+ * User notification preferences.
+ */
+export interface NotificationPreferences {
+  /** User ID */
+  userId: string;
+  /** Global notification toggle */
+  enabled: boolean;
+  /** Quiet hours start (HH:mm format, e.g., "22:00") */
+  quietHoursStart?: string;
+  /** Quiet hours end (HH:mm format, e.g., "07:00") */
+  quietHoursEnd?: string;
+  /** Timezone for quiet hours */
+  timezone: string;
+
+  // Per-type preferences
+  /** Harvest reminders enabled */
+  harvestReminders: boolean;
+  /** Days before harvest to send reminder */
+  harvestReminderDays: number;
+  /** Weather alerts enabled */
+  weatherAlerts: boolean;
+  /** Price alerts enabled */
+  priceAlerts: boolean;
+  /** Price change threshold percentage for alerts */
+  priceAlertThreshold: number;
+  /** Demand notifications enabled */
+  demandNotifications: boolean;
+  /** Match notifications enabled */
+  matchNotifications: boolean;
+  /** Cooperative announcements enabled */
+  cooperativeAnnouncements: boolean;
+
+  /** Use daily digest instead of immediate notifications */
+  dailyDigest: boolean;
+  /** Preferred time for daily digest (HH:mm format) */
+  digestTime?: string;
+
+  /** Updated timestamp */
+  updatedAt: Date;
+}
+
+/**
+ * Default notification preferences for new users.
+ */
+export const DEFAULT_NOTIFICATION_PREFERENCES: Omit<
+  NotificationPreferences,
+  'userId' | 'updatedAt'
+> = {
+  enabled: true,
+  timezone: 'Asia/Taipei',
+  harvestReminders: true,
+  harvestReminderDays: 3,
+  weatherAlerts: true,
+  priceAlerts: true,
+  priceAlertThreshold: 15, // 15% change
+  demandNotifications: true,
+  matchNotifications: true,
+  cooperativeAnnouncements: true,
+  dailyDigest: false,
+};
+
+/**
+ * Notification template for generating messages.
+ */
+export interface NotificationTemplate {
+  /** Template ID */
+  id: string;
+  /** Notification type this template is for */
+  type: NotificationType;
+  /** i18n key for title */
+  titleKey: string;
+  /** i18n key for body */
+  bodyKey: string;
+  /** Default priority */
+  defaultPriority: NotificationPriority;
+  /** Required data fields for the template */
+  requiredFields: string[];
+}
+
+/**
+ * Event that triggers a notification.
+ */
+export interface NotificationTrigger {
+  /** Trigger type */
+  type: NotificationType;
+  /** Source entity type */
+  sourceType:
+    | 'planting_record'
+    | 'harvest_record'
+    | 'match'
+    | 'demand'
+    | 'weather'
+    | 'price'
+    | 'system';
+  /** Source entity ID */
+  sourceId?: string;
+  /** Target user IDs (empty = determine from context) */
+  targetUserIds?: string[];
+  /** Target cooperative ID */
+  cooperativeId: string;
+  /** Additional data for the notification */
+  data: Record<string, unknown>;
+  /** Override priority */
+  priority?: NotificationPriority;
+  /** Scheduled time (null = immediate) */
+  scheduledAt?: Date;
+}
+
+/**
+ * Notification delivery result.
+ */
+export interface NotificationDeliveryResult {
+  /** Notification ID */
+  notificationId: string;
+  /** Whether delivery was successful */
+  success: boolean;
+  /** Error message if failed */
+  error?: string;
+  /** LINE message ID if sent via LINE */
+  lineMessageId?: string;
+  /** Delivery timestamp */
+  deliveredAt?: Date;
+}
+
+/**
+ * Scheduled job configuration for notifications.
+ */
+export interface NotificationSchedule {
+  /** Job ID */
+  id: string;
+  /** Job name */
+  name: string;
+  /** Cron expression */
+  cronExpression: string;
+  /** Notification type to check/send */
+  notificationType: NotificationType;
+  /** Whether the job is active */
+  isActive: boolean;
+  /** Last run timestamp */
+  lastRunAt?: Date;
+  /** Status of last run */
+  lastRunStatus?: 'success' | 'failed';
+  /** Next scheduled run */
+  nextRunAt?: Date;
+}
+
+// ============================================================
 // Utility Functions
 // ============================================================
 

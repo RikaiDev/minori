@@ -200,5 +200,76 @@
       "expired": "已過期",
       "cancelled": "已取消"
     }
+  },
+  "notifications": {
+    "harvest_reminder": {
+      "title": "🌾 採收提醒",
+      "body": "您的{cropName}預計 {daysUntilHarvest} 天後可採收（約 {expectedDate}）"
+    },
+    "harvest_confirmed": {
+      "title": "✓ 採收已記錄",
+      "body": "您的{cropName}採收 {quantity}{unit} 已記錄"
+    },
+    "planting_confirmed": {
+      "title": "✓ 種植已記錄",
+      "body": "您的{cropName}種植 {area}{unit} 已記錄。預計採收：{expectedHarvestDate}"
+    },
+    "planting_optimal": {
+      "title": "🌱 最佳種植時機",
+      "body": "現在是種植{cropName}的好時機！最佳時間：{windowStart} - {windowEnd}"
+    },
+    "weather_alert": {
+      "title": "⚠️ 天氣警報",
+      "body": "{alertType}（{severity}）：{description}"
+    },
+    "weather_forecast": {
+      "title": "🌤️ 天氣預報",
+      "body": "{forecastSummary}。溫度：{temperature}°C，降雨量：{rainfall}mm"
+    },
+    "price_alert": {
+      "title": "💰 價格提醒",
+      "body": "{cropName}價格變動 {changePercent}%（{trend}）。目前價格：{currentPrice} 元/公斤"
+    },
+    "price_opportunity": {
+      "title": "📈 價格機會",
+      "body": "{cropName}價格表現佳，目前 {currentPrice} 元/公斤。{suggestion}"
+    },
+    "demand_new": {
+      "title": "🛒 新需求",
+      "body": "{buyerName}需要 {quantity} 公斤{cropName}，交貨日期 {deliveryDate}"
+    },
+    "demand_urgent": {
+      "title": "🚨 緊急需求",
+      "body": "緊急：{buyerName}需要 {quantity} 公斤{cropName}，截止日期 {deadline}"
+    },
+    "match_found": {
+      "title": "🤝 找到配對",
+      "body": "您的{cropName}（{quantity} 公斤）與{buyerName}的需求配對成功。配對分數：{matchScore}%"
+    },
+    "match_accepted": {
+      "title": "✓ 配對已接受",
+      "body": "{farmerName}已接受您的{cropName} {quantity} 公斤需求"
+    },
+    "match_rejected": {
+      "title": "配對婉拒",
+      "body": "{cropName} {quantity} 公斤的配對已婉拒。原因：{reason}"
+    },
+    "match_fulfilled": {
+      "title": "✓ 配對完成",
+      "body": "您的{cropName} {quantity} 公斤配對已完成交貨"
+    },
+    "cooperative_announcement": {
+      "title": "📢 合作社公告",
+      "body": "{message}"
+    },
+    "system": {
+      "title": "ℹ️ 系統訊息",
+      "body": "{message}"
+    },
+    "preferences": {
+      "updated": "通知設定已更新",
+      "enabled": "通知已啟用",
+      "disabled": "通知已停用"
+    }
   }
 }

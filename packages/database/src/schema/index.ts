@@ -13,4 +13,5 @@ export * from './growth-records';
 export * from './demands';
 export * from './matches';
 export * from './tenant';
+export * from './notifications';
 export * from './relations';

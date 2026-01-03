@@ -200,5 +200,76 @@
       "expired": "Expired",
       "cancelled": "Cancelled"
     }
+  },
+  "notifications": {
+    "harvest_reminder": {
+      "title": "🌾 Harvest Reminder",
+      "body": "Your {cropName} is expected to be ready in {daysUntilHarvest} days (around {expectedDate})"
+    },
+    "harvest_confirmed": {
+      "title": "✓ Harvest Recorded",
+      "body": "Your {cropName} harvest of {quantity} {unit} has been recorded"
+    },
+    "planting_confirmed": {
+      "title": "✓ Planting Recorded",
+      "body": "Your {cropName} planting of {area} {unit} has been recorded. Expected harvest: {expectedHarvestDate}"
+    },
+    "planting_optimal": {
+      "title": "🌱 Optimal Planting Window",
+      "body": "Now is a great time to plant {cropName}! Optimal window: {windowStart} - {windowEnd}"
+    },
+    "weather_alert": {
+      "title": "⚠️ Weather Alert",
+      "body": "{alertType} ({severity}): {description}"
+    },
+    "weather_forecast": {
+      "title": "🌤️ Weather Forecast",
+      "body": "{forecastSummary}. Temperature: {temperature}°C, Rainfall: {rainfall}mm"
+    },
+    "price_alert": {
+      "title": "💰 Price Alert",
+      "body": "{cropName} price changed {changePercent}% ({trend}). Current price: ${currentPrice}/kg"
+    },
+    "price_opportunity": {
+      "title": "📈 Price Opportunity",
+      "body": "{cropName} prices are favorable at ${currentPrice}/kg. {suggestion}"
+    },
+    "demand_new": {
+      "title": "🛒 New Demand",
+      "body": "{buyerName} needs {quantity} kg of {cropName} by {deliveryDate}"
+    },
+    "demand_urgent": {
+      "title": "🚨 Urgent Demand",
+      "body": "Urgent: {buyerName} needs {quantity} kg of {cropName} by {deadline}"
+    },
+    "match_found": {
+      "title": "🤝 Match Found",
+      "body": "Your {cropName} ({quantity} kg) matched with {buyerName}'s demand. Score: {matchScore}%"
+    },
+    "match_accepted": {
+      "title": "✓ Match Accepted",
+      "body": "{farmerName} accepted your request for {quantity} kg of {cropName}"
+    },
+    "match_rejected": {
+      "title": "Match Declined",
+      "body": "The match for {quantity} kg of {cropName} was declined. Reason: {reason}"
+    },
+    "match_fulfilled": {
+      "title": "✓ Match Fulfilled",
+      "body": "Your match for {quantity} kg of {cropName} has been completed"
+    },
+    "cooperative_announcement": {
+      "title": "📢 Cooperative Announcement",
+      "body": "{message}"
+    },
+    "system": {
+      "title": "ℹ️ System Message",
+      "body": "{message}"
+    },
+    "preferences": {
+      "updated": "Notification preferences updated",
+      "enabled": "Notifications enabled",
+      "disabled": "Notifications disabled"
+    }
   }
 }

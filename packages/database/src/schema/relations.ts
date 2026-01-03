@@ -19,6 +19,7 @@ import {
   cooperativeSharingRelations as sharingRelationsTable,
   memberInvitations,
 } from './tenant';
+import { notifications, notificationPreferences } from './notifications';
 
 /**
  * Cooperative relations.
@@ -182,6 +183,30 @@ export const memberInvitationsRelations = relations(memberInvitations, ({ one })
   }),
   acceptedByUser: one(users, {
     fields: [memberInvitations.acceptedBy],
+    references: [users.id],
+  }),
+}));
+
+/**
+ * Notification relations.
+ */
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+  cooperative: one(cooperatives, {
+    fields: [notifications.cooperativeId],
+    references: [cooperatives.id],
+  }),
+}));
+
+/**
+ * Notification preferences relations.
+ */
+export const notificationPreferencesRelations = relations(notificationPreferences, ({ one }) => ({
+  user: one(users, {
+    fields: [notificationPreferences.userId],
     references: [users.id],
   }),
 }));
