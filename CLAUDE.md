@@ -116,6 +116,8 @@ docs(readme): update installation instructions
 - Write tests for all public functions
 - Use Bun's built-in test runner
 - Test file naming: `*.test.ts`
+- **Never use `@ts-nocheck` or `@ts-ignore`** - fix type errors properly
+- **Avoid `eslint-disable` comments** - fix lint issues properly (exception: `@typescript-eslint/no-explicit-any` for MockFn type definition)
 
 ```typescript
 // crop-database.test.ts
@@ -141,6 +143,67 @@ describe('findCropByName', () => {
   });
 });
 ```
+
+#### Mocking with Proper TypeScript Types
+
+When using Bun's `mock()` function, define a proper `MockFn` type to ensure type safety:
+
+```typescript
+import { describe, expect, test, mock, beforeEach } from 'bun:test';
+
+// Define a generic MockFn type for typed mocks
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MockFn<T extends (...args: any[]) => any> = ReturnType<typeof mock<T>> & {
+  mockResolvedValueOnce: (value: Awaited<ReturnType<T>>) => void;
+  mockRejectedValueOnce: (error: Error) => void;
+  mockReturnValue: (value: ReturnType<T>) => void;
+};
+
+// Create typed mocks with proper casting
+const mockReplyText = mock(() => Promise.resolve()) as MockFn<
+  (token: string, text: string) => Promise<void>
+>;
+
+// For complex return types, define interfaces first
+interface ApiResponse {
+  data: string;
+  status: number;
+}
+
+const mockFetchData = mock(() =>
+  Promise.resolve({ data: 'test', status: 200 } as ApiResponse)
+) as MockFn<(url: string) => Promise<ApiResponse>>;
+
+// When mock return type doesn't exactly match, cast through 'unknown'
+const mockIsValid = mock(() => true) as unknown as MockFn<
+  (input: ComplexType) => boolean
+>;
+
+// Use mock.module() to mock entire modules
+mock.module('@minori/core', () => ({
+  findCropByName: mockFindCrop,
+  predictHarvest: mockPredictHarvest,
+}));
+
+// Access mock calls safely with optional chaining
+describe('handler tests', () => {
+  test('calls reply with correct message', async () => {
+    await handleMessage('test');
+
+    const calls = mockReplyText.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const message = calls[0]?.[1] ?? '';
+    expect(message).toContain('expected text');
+  });
+});
+```
+
+**Key principles for mock typing:**
+1. Use `any` in the MockFn constraint (with eslint-disable comment) - this is necessary for TypeScript's function contravariance
+2. Define explicit interfaces for complex mock return types
+3. Cast through `unknown` when mock implementation type doesn't match the signature exactly
+4. Use optional chaining (`?.`) when accessing `mock.calls` to handle empty arrays
+5. Never use `@ts-nocheck` or `@ts-ignore` to bypass type errors
 
 ### 7. Error Handling
 
