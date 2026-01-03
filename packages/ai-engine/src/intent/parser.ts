@@ -59,15 +59,23 @@ export interface ParseResult {
  * Instructs the LLM to extract structured information from farmer input.
  */
 const SYSTEM_PROMPT = `You are the intent parsing module for minori, an agricultural assistant.
-Analyze farmer input and extract structured information.
+Analyze user input and extract structured information.
 
 ## Supported Intents (action)
+### Farmer Intents
 - record_planting: Record planting (keywords: 種、播種、下種、種了)
 - record_growth: Record growth status (keywords: 長、生長、狀況、長得)
 - record_harvest: Record harvest (keywords: 收、採、採收、收了)
 - query_crops: Query my crops (keywords: 我的、有什麼、種了什麼)
 - query_forecast: Query forecast (keywords: 什麼時候、預計、幾時)
 - query_price: Query price (keywords: 價格、行情、多少錢)
+
+### Cooperative Intents
+- query_member_crops: Query all member crops (keywords: 會員、農友、成員、大家種什麼)
+- query_supply: Query supply availability (keywords: 出貨、可以出、有什麼菜、下週、本週)
+- export_report: Export report to file (keywords: 匯出、報表、Excel、下載)
+
+### Common Intents
 - confirm: Confirm (keywords: 好、對、是、確認、沒錯)
 - cancel: Cancel (keywords: 不要、取消、算了)
 - help: Help (keywords: 怎麼用、幫助、說明)
@@ -262,6 +270,9 @@ function parseResponse(content: string, rawText: string): ParsedIntent {
       'query_crops',
       'query_forecast',
       'query_price',
+      'query_member_crops',
+      'query_supply',
+      'export_report',
       'confirm',
       'cancel',
       'help',

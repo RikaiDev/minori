@@ -77,6 +77,9 @@ export type IntentAction =
   | 'query_crops'
   | 'query_forecast'
   | 'query_price'
+  | 'query_member_crops'
+  | 'query_supply'
+  | 'export_report'
   | 'confirm'
   | 'cancel'
   | 'help'
@@ -171,6 +174,73 @@ export interface User {
   locale?: 'en' | 'zh-TW';
   createdAt: Date;
 }
+
+// ============================================================
+// Cooperative Types
+// ============================================================
+
+/**
+ * Summary of a single crop across all members.
+ */
+export interface CropSummary {
+  cropId: string;
+  cropName: string;
+  totalArea: number;
+  farmerCount: number;
+  estimatedYield: number;
+  estimatedHarvestDate: Date;
+  confidence: number;
+}
+
+/**
+ * Supply availability for a time period.
+ */
+export interface SupplyItem {
+  cropId: string;
+  cropName: string;
+  estimatedQuantity: number;
+  farmerCount: number;
+  earliestDate: Date;
+  latestDate: Date;
+  farmers: Array<{
+    farmerId: string;
+    farmerName: string;
+    quantity: number;
+    harvestDate: Date;
+  }>;
+}
+
+/**
+ * Member crop report for a cooperative.
+ */
+export interface MemberCropReport {
+  cooperativeId: string;
+  generatedAt: Date;
+  totalFarmers: number;
+  totalArea: number;
+  crops: CropSummary[];
+}
+
+/**
+ * Supply availability report for a time period.
+ */
+export interface SupplyReport {
+  cooperativeId: string;
+  periodStart: Date;
+  periodEnd: Date;
+  generatedAt: Date;
+  items: SupplyItem[];
+}
+
+/**
+ * Export format for reports.
+ */
+export type ExportFormat = 'xlsx' | 'csv' | 'json';
+
+/**
+ * Report type for export.
+ */
+export type ReportType = 'member_crops' | 'supply' | 'harvest_history';
 
 // ============================================================
 // Utility Functions

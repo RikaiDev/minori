@@ -21,6 +21,7 @@ import { parseIntent, ConversationManager, type ProcessMessageResult } from '@mi
 import { findCropByName, predictHarvest, getCropById, PriceService } from '@minori/core';
 import { t, formatDate } from '@minori/shared';
 import type { ParsedIntent, ParsedEntities } from '@minori/shared';
+import { handleCooperativeAction } from './cooperative-handler';
 
 /**
  * Response with optional quick reply buttons.
@@ -212,6 +213,12 @@ async function executeAction(
 
     case 'query_price':
       return handleQueryPrice(entities);
+
+    // Cooperative intents
+    case 'query_member_crops':
+    case 'query_supply':
+    case 'export_report':
+      return handleCooperativeAction(action, entities, userId);
 
     case 'confirm':
       return {

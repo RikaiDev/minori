@@ -124,5 +124,34 @@
       "jin": "jin",
       "taiwanJin": "Taiwan jin"
     }
+  },
+  "cooperative": {
+    "memberCrops": {
+      "title": "📋 Member Crop Overview",
+      "summary": "{farmers} farmers, total area: {area} plots",
+      "item": "• {crop}: ~{yield} kg ({farmers} farmers) expected {date}",
+      "empty": "No member planting records found."
+    },
+    "supply": {
+      "title": "🚛 {period} Expected Shipments",
+      "item": "• {crop}: ~{quantity} kg ({farmers} farmers: {farmerNames})",
+      "empty": "No expected shipments for {period}."
+    },
+    "export": {
+      "askType": "Please select the report type to export:",
+      "askFormat": "Please select the export format:",
+      "success": "✓ Report generated: {filename}",
+      "error": "Sorry, an error occurred while exporting the report. Please try again later.",
+      "unknownType": "Sorry, this report type is not supported."
+    },
+    "error": "Sorry, an error occurred while processing your request. Please try again later.",
+    "help": {
+      "title": "🌾 Cooperative Management Guide",
+      "intro": "I can help you:",
+      "memberCrops": "• Query member crops: \"What are members growing?\"",
+      "supply": "• Query shipments: \"What can we ship next week?\"",
+      "export": "• Export reports: \"Export member crop report\"",
+      "closing": "Feel free to ask anytime!"
+    }
   }
 }

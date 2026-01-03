@@ -9,3 +9,4 @@ export * from './prediction';
 export * from './crops/crop-database';
 export * from './weather';
 export * from './price';
+export * from './cooperative';

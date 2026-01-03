@@ -124,5 +124,34 @@
       "jin": "斤",
       "taiwanJin": "台斤"
     }
+  },
+  "cooperative": {
+    "memberCrops": {
+      "title": "📋 會員作物總覽",
+      "summary": "共 {farmers} 位農友，總面積 {area} 分地",
+      "item": "• {crop}：約 {yield} 公斤（{farmers} 位農友）預計 {date}",
+      "empty": "目前沒有會員種植記錄。"
+    },
+    "supply": {
+      "title": "🚛 {period}預計出貨",
+      "item": "• {crop}：約 {quantity} 公斤（{farmers} 位：{farmerNames}）",
+      "empty": "{period}暫無預計出貨的作物。"
+    },
+    "export": {
+      "askType": "請選擇要匯出的報表類型：",
+      "askFormat": "請選擇匯出格式：",
+      "success": "✓ 報表已產生：{filename}",
+      "error": "抱歉，匯出報表時發生錯誤，請稍後再試。",
+      "unknownType": "抱歉，不支援這種報表類型。"
+    },
+    "error": "抱歉，處理您的請求時發生錯誤，請稍後再試。",
+    "help": {
+      "title": "🌾 合作社管理說明",
+      "intro": "我可以幫您：",
+      "memberCrops": "• 查詢會員作物：「會員種了什麼」",
+      "supply": "• 查詢出貨：「下週有什麼可以出」",
+      "export": "• 匯出報表：「匯出會員作物報表」",
+      "closing": "有問題隨時問我！"
+    }
   }
 }
