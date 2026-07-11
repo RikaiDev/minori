@@ -1,3 +1,8 @@
+<!-- rikai-logo -->
+<p align="center">
+  <img src=".github/assets/logo.svg" alt="minori" width="96" height="96">
+</p>
+
 # minori (実り)
 
 > AI-powered agricultural collaboration platform — Voice-first field recording with harvest prediction
